@@ -55,7 +55,8 @@ from tvb.core.entities.file.files_helper import FilesHelper
 from tvb.core.entities.transient.structure_entities import DataTypeMetaData
 from tvb.core.adapters.exceptions import IntrospectionException, LaunchException, InvalidParameterException
 from tvb.core.adapters.exceptions import NoMemoryAvailableException
-
+from tvb.core.neotraits._forms import Form, DataTypeSelectField
+from tvb.tests.framework.interfaces.neoforms_test import jinja_env
 
 ATT_METHOD = "python_method"
 ATT_PARAMETERS = "parameters_prefix"
@@ -116,6 +117,53 @@ def nan_allowed():
         return new_function
 
     return wrap
+
+
+class ABCAdapterForm(Form):
+    @staticmethod
+    def get_required_datatype():
+        raise NotImplementedError
+
+    # TODO: This keeps filters for the required_datatype. Only to be in DB at introspection?
+    @staticmethod
+    def get_filters():
+        raise NotImplementedError
+
+    @staticmethod
+    def get_input_name():
+        raise NotImplementedError
+
+    # TODO: This is used to fill in defaults for GET requests. Makes sense only for analyzers?
+    @abstractmethod
+    def get_traited_datatype(self):
+        """"""
+
+    def _get_original_field_name(self, field):
+        return field.name[len(self.prefix) + 1:]
+
+    # TODO: Used to support original flow (pass form values as kwargs). Also for the asynchronous launch
+    def get_dict(self):
+        attrs_dict = {}
+        for field in self.fields:
+            attrs_dict.update({field.name: field.data})
+        attrs_dict.update({self.RANGE_1_NAME: self.range_1})
+        attrs_dict.update({self.RANGE_2_NAME: self.range_2})
+        return attrs_dict
+
+    def get_form_values(self):
+        attrs_dict = {}
+        for field in self.fields:
+            field_name = self._get_original_field_name(field)
+            if isinstance(field, DataTypeSelectField):
+                field_data = field.get_dt_from_db()
+            else:
+                field_data = field.data
+            attrs_dict.update({field_name: field_data})
+        return attrs_dict
+
+    def __str__(self):
+        # TODO: Keep using Jinja2?
+        return jinja_env.get_template("form.jinja2").render(form=self)
 
 
 
@@ -319,7 +367,8 @@ class ABCAdapter(object):
 
         if not isinstance(result, (list, tuple)):
             result = [result, ]
-        self.__check_integrity(result)
+        # TODO: Fix this
+        # self.__check_integrity(result)
 
         return self._capture_operation_results(result, uid)
 
@@ -367,7 +416,8 @@ class ABCAdapter(object):
                 res.disk_size = self.file_handler.compute_size_on_disk(associated_file)
             res = dao.store_entity(res)
             # Write metaData
-            res.persist_full_metadata()
+            # TODO: persistance should be done inisde launch()
+            # res.persist_full_metadata()
             results_to_store.append(res)
         del result[0:len(result)]
         result.extend(results_to_store)
@@ -515,7 +565,10 @@ class ABCAdapter(object):
 
 
     def flaten_input_interface(self):
-        """ Return a simple dictionary, instead of a Tree."""
+        # TODO: temporary condition to pass introspection on neoforms
+        form = self.get_form()
+        if form:
+            return [form._get_original_field_name(form_field) for form_field in form.fields]
         return self.tree_manager.flatten(self.get_input_tree())
 
 

@@ -45,7 +45,7 @@ import six
 from copy import copy
 from cgi import FieldStorage
 from datetime import datetime
-from tvb.basic.traits.exceptions import TVBException
+from tvb.basic.exceptions import TVBException
 from tvb.basic.traits.types_basic import MapAsJson, Range
 from tvb.basic.profile import TvbProfile
 from tvb.basic.logger.builder import get_logger
@@ -53,7 +53,10 @@ from tvb.core import utils
 from tvb.core.adapters import constants
 from tvb.core.adapters.abcadapter import ABCAdapter, ABCSynchronous
 from tvb.core.adapters.exceptions import LaunchException
-from tvb.core.entities import model
+from tvb.core.entities.model.model_burst import PARAM_RANGE_PREFIX, RANGE_PARAMETER_1, RANGE_PARAMETER_2
+from tvb.core.entities.model.model_datatype import DataTypeGroup
+from tvb.core.entities.model.model_operation import STATUS_FINISHED, STATUS_ERROR, OperationGroup, Operation
+from tvb.core.entities.model.model_workflow import WorkflowStepView
 from tvb.core.entities.storage import dao
 from tvb.core.entities.transient.structure_entities import DataTypeMetaData
 from tvb.core.entities.file.files_helper import FilesHelper
@@ -68,8 +71,8 @@ except Exception:
 
 TEMPORARY_PREFIX = ".tmp"
 
-RANGE_PARAMETER_1 = model.RANGE_PARAMETER_1
-RANGE_PARAMETER_2 = model.RANGE_PARAMETER_2
+RANGE_PARAMETER_1 = RANGE_PARAMETER_1
+RANGE_PARAMETER_2 = RANGE_PARAMETER_2
 
 UIKEY_SUBJECT = "RESERVEDsubject"
 UIKEY_USERGROUP = "RESERVEDusergroup"
@@ -95,8 +98,7 @@ class OperationService:
     ######## Methods related to launching operations start here ##############################
     ##########################################################################################
 
-    def initiate_operation(self, current_user, project_id, adapter_instance,
-                           temporary_storage, visible=True, **kwargs):
+    def initiate_operation(self, current_user, project_id, adapter_instance, visible=True, **kwargs):
         """
         Gets the parameters of the computation from the previous inputs form,
         and launches a computation (on the cluster or locally).
@@ -108,35 +110,7 @@ class OperationService:
             self.logger.warning("Inconsistent Adapter Class:" + str(adapter_instance.__class__))
             raise LaunchException("Developer Exception!!")
 
-        # Prepare Files parameters
-        files = {}
-        kw2 = copy(kwargs)
-        for i, j in six.iteritems(kwargs):
-            if isinstance(j, FieldStorage) or isinstance(j, Part):
-                files[i] = j
-                del kw2[i]
-
-        temp_files = {}
-        try:
-            for i, j in six.iteritems(files):
-                if j.file is None:
-                    kw2[i] = None
-                    continue
-                uq_name = utils.date2string(datetime.now(), True) + '_' + str(i)
-                # We have to add original file name to end, in case file processing
-                # involves file extension reading
-                file_name = TEMPORARY_PREFIX + uq_name + '_' + j.filename
-                file_name = os.path.join(temporary_storage, file_name)
-                kw2[i] = file_name
-                temp_files[i] = file_name
-                with open(file_name, 'wb') as file_obj:
-                    file_obj.write(j.file.read())
-                self.logger.debug("Will store file:" + file_name)
-            kwargs = kw2
-        except Exception as excep:
-            self._handle_exception(excep, temp_files, "Could not launch operation: invalid input files!")
-
-        ### Store Operation entity. 
+        ### Store Operation entity.
         algo = adapter_instance.stored_adapter
         algo_category = dao.get_category_by_id(algo.fk_category)
 
@@ -149,7 +123,7 @@ class OperationService:
             if len(operations) < 1:
                 self.logger.warning("No operation was defined")
                 raise LaunchException("Invalid empty Operation!!!")
-            return self.initiate_prelaunch(operations[0], adapter_instance, temp_files, **kwargs)
+            return self.initiate_prelaunch(operations[0], adapter_instance, **kwargs)
         else:
             return self._send_to_cluster(operations, adapter_instance, current_user.username)
 
@@ -231,9 +205,9 @@ class OperationService:
         meta_str = json.dumps(metadata)
         for (one_set_of_args, range_vals) in available_args:
             range_values = json.dumps(range_vals) if range_vals else None
-            operation = model.Operation(user_id, project_id, algorithm.id,
-                                        json.dumps(one_set_of_args, cls=MapAsJson.MapAsJsonEncoder), meta_str,
-                                        op_group_id=group_id, user_group=user_group, range_values=range_values)
+            operation = Operation(user_id, project_id, algorithm.id,
+                                  json.dumps(one_set_of_args), meta_str,
+                                  op_group_id=group_id, user_group=user_group, range_values=range_values)
             operation.visible = visible_operation
             operations.append(operation)
         operations = dao.store_entities(operations)
@@ -243,7 +217,7 @@ class OperationService:
             if DataTypeMetaData.KEY_BURST in metadata:
                 burst_id = metadata[DataTypeMetaData.KEY_BURST]
             if existing_dt_group is None:
-                datatype_group = model.DataTypeGroup(group, operation_id=operations[0].id, fk_parent_burst=burst_id,
+                datatype_group = DataTypeGroup(group, operation_id=operations[0].id, fk_parent_burst=burst_id,
                                                      state=metadata[DataTypeMetaData.KEY_STATE])
                 dao.store_entity(datatype_group)
             else:
@@ -265,8 +239,8 @@ class OperationService:
 
         for step in workflow_step_list:
             operation_group = None
-            if (group is not None) and not isinstance(step, model.WorkflowStepView):
-                operation_group = model.OperationGroup(project_id=project_id, ranges=group.range_references)
+            if (group is not None) and not isinstance(step, WorkflowStepView):
+                operation_group = OperationGroup(project_id=project_id, ranges=group.range_references)
                 operation_group = dao.store_entity(operation_group)
 
             operation = None
@@ -287,10 +261,10 @@ class OperationService:
                     group_id = operation_group.id
                     range_values = sim_operations[wf_idx].range_values
 
-                if not isinstance(step, model.WorkflowStepView):
+                if not isinstance(step, WorkflowStepView):
                     ## For visualization steps, do not create operations, as those are not really needed.
                     metadata, user_group = self._prepare_metadata(metadata, algo_category, operation_group, op_params)
-                    operation = model.Operation(user_id, project_id, step.fk_algorithm,
+                    operation = Operation(user_id, project_id, step.fk_algorithm,
                                                 json.dumps(op_params, cls=MapAsJson.MapAsJsonEncoder),
                                                 meta=json.dumps(metadata),
                                                 op_group_id=group_id, range_values=range_values, user_group=user_group)
@@ -301,23 +275,32 @@ class OperationService:
                 dao.store_entity(cloned_w_step)
 
             if operation_group is not None and operation is not None:
-                datatype_group = model.DataTypeGroup(operation_group, operation_id=operation.id,
+                datatype_group = DataTypeGroup(operation_group, operation_id=operation.id,
                                                      fk_parent_burst=burst_id,
                                                      state=metadata[DataTypeMetaData.KEY_STATE])
                 dao.store_entity(datatype_group)
 
 
-    def initiate_prelaunch(self, operation, adapter_instance, temp_files, **kwargs):
+    def initiate_prelaunch(self, operation, adapter_instance, **kwargs):
         """
         Public method.
         This should be the common point in calling an adapter- method.
         """
         result_msg = ""
+        temp_files = []
         try:
             unique_id = None
             if self.ATT_UID in kwargs:
                 unique_id = kwargs[self.ATT_UID]
-            filtered_kwargs = adapter_instance.prepare_ui_inputs(kwargs)
+            #TODO: this currently keeps both ways to display forms
+            if adapter_instance.get_input_tree() is None:
+                filtered_kwargs = adapter_instance.get_form().get_form_values()
+            else:
+                # Replace this with a method to retrieve TSI by GID/Keep only GID on kwargs dict
+                # We might not need kwargs anymore
+                filtered_kwargs = kwargs
+                filtered_kwargs = adapter_instance.prepare_ui_inputs(kwargs)
+
             self.logger.debug("Launching operation " + str(operation.id) + " with " + str(filtered_kwargs))
             operation = dao.get_operation_by_id(operation.id)   # Load Lazy fields
 
@@ -334,11 +317,17 @@ class OperationService:
             operation = dao.get_operation_by_id(operation.id)
             ## Update DB stored kwargs for search purposes, to contain only valuable params (no unselected options)
             operation.parameters = json.dumps(kwargs)
-            operation.mark_complete(model.STATUS_FINISHED)
+            operation.mark_complete(STATUS_FINISHED)
             if nr_datatypes > 0:
                 #### Write operation meta-XML only if some result are returned
                 self.file_helper.write_operation_metadata(operation)
             dao.store_entity(operation)
+            adapter_form = adapter_instance.get_form()
+            try:
+                temp_files = adapter_form.temporary_files
+            except AttributeError:
+                pass
+
             self._remove_files(temp_files)
 
         except zipfile.BadZipfile as excep:
@@ -386,7 +375,7 @@ class OperationService:
             if send_to_cluster:
                 self._send_to_cluster([operation], adapter_instance, operation.user.username)
             else:
-                self.initiate_prelaunch(operation, adapter_instance, {}, **parsed_params)
+                self.initiate_prelaunch(operation, adapter_instance, **parsed_params)
 
 
     def _handle_exception(self, exception, temp_files, message, operation=None):
@@ -398,19 +387,19 @@ class OperationService:
         """
         self.logger.exception(message)
         if operation is not None:
-            self.workflow_service.persist_operation_state(operation, model.STATUS_ERROR, unicode(exception))
+            self.workflow_service.persist_operation_state(operation, STATUS_ERROR, unicode(exception))
             self.workflow_service.update_executed_workflow_state(operation)
         self._remove_files(temp_files)
         exception.message = message
         raise exception, None, sys.exc_info()[2]  # when rethrowing in python this is required to preserve the stack trace
 
 
-    def _remove_files(self, file_dictionary):
+    def _remove_files(self, file_list):
         """
         Remove any files that exist in the file_dictionary. 
         Currently used to delete temporary files created during an operation.
         """
-        for pth in file_dictionary.itervalues():
+        for pth in file_list:
             pth = str(pth)
             try:
                 if os.path.exists(pth) and os.path.isfile(pth):
@@ -424,7 +413,7 @@ class OperationService:
 
     @staticmethod
     def _range_name(range_no):
-        return model.PARAM_RANGE_PREFIX + str(range_no)
+        return PARAM_RANGE_PREFIX + str(range_no)
 
 
     def _prepare_group(self, project_id, existing_dt_group, kwargs):
@@ -457,7 +446,7 @@ class OperationService:
         if not is_group:
             group = None
         elif existing_dt_group is None:
-            group = model.OperationGroup(project_id=project_id, ranges=ranges)
+            group = OperationGroup(project_id=project_id, ranges=ranges)
             group = dao.store_entity(group)
         else:
             group = existing_dt_group.parent_operation_group

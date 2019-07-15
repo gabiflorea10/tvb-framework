@@ -238,7 +238,7 @@ class HDF5StorageManager(object):
                     LOG.error("Trying to read data from a missing data set: %s" % dataset_name)
                     raise MissingDataSetException("Could not locate dataset: %s" % dataset_name)
                 else:
-                    return numpy.ndarray(0)
+                    return None
         finally:
             if close_file:
                 self.close_file()
@@ -411,12 +411,11 @@ class HDF5StorageManager(object):
                 return numpy.ndarray(0)
         except AttributeError:
             msg = "Trying to get value for missing metadata %s" % meta_key
-            LOG.error(msg)
+            LOG.exception(msg)
             raise FileStructureException(msg)
-        except Exception as excep:
+        except Exception:
             msg = "Failed to read metadata from H5 file! %s" % self.__storage_full_name
-            LOG.exception(excep)
-            LOG.error(msg)
+            LOG.exception(msg)
             raise FileStructureException(msg)
         finally:
             self.close_file()

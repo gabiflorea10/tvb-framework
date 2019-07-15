@@ -37,11 +37,12 @@ import json
 import threading
 from datetime import datetime
 from types import IntType
-from tvb.config import MEASURE_METRICS_MODULE, MEASURE_METRICS_CLASS, DEFAULT_PORTLETS
-from tvb.config import SIMULATION_DATATYPE_MODULE, SIMULATION_DATATYPE_CLASS
+from tvb.core.services.introspector_registry import IntrospectionRegistry
 from tvb.basic.logger.builder import get_logger
 from tvb.core.adapters.input_tree import KEY_TYPE, TYPE_SELECT, KEY_NAME, InputTreeManager
-import tvb.core.entities.model as model
+from tvb.core.entities.model.model_burst import BurstConfiguration
+from tvb.core.entities.model.model_operation import OperationGroup, STATUS_ERROR, STATUS_FINISHED
+from tvb.core.entities.model.model_workflow import WorkflowStep
 from tvb.core.entities.transient.structure_entities import DataTypeMetaData
 from tvb.core.entities.transient.burst_configuration_entities import PortletConfiguration, WorkflowStepConfiguration
 from tvb.core.entities.storage import dao, transactional
@@ -140,12 +141,12 @@ class BurstService(object):
         """
         Return a new burst configuration entity with all the default values.
         """
-        burst_configuration = model.BurstConfiguration(project_id)
+        burst_configuration = BurstConfiguration(project_id)
         burst_configuration.selected_tab = 0
 
         # Now set the default portlets for the specified burst configuration.
         # The default portlets are specified in the __init__.py script from tvb root.
-        for tab_idx, value in DEFAULT_PORTLETS.items():
+        for tab_idx, value in IntrospectionRegistry.DEFAULT_PORTLETS.items():
             for sel_idx, portlet_identifier in value.items():
                 portlet = BurstService.get_portlet_by_identifier(portlet_identifier)
                 if portlet is not None:
@@ -321,7 +322,8 @@ class BurstService(object):
         else:
             ## Branch or Continue simulation
             burst_config = burst_configuration
-            simulation_state = dao.get_generic_entity(SIMULATION_DATATYPE_MODULE + "." + SIMULATION_DATATYPE_CLASS,
+            simulation_state = dao.get_generic_entity(IntrospectionRegistry.SIMULATION_DATATYPE_MODULE + "." +
+                                                      IntrospectionRegistry.SIMULATION_DATATYPE_CLASS,
                                                       burst_config.id, "fk_parent_burst")
             if simulation_state is None or len(simulation_state) < 1:
                 exc = BurstServiceException("Simulation State not found for %s, "
@@ -388,7 +390,7 @@ class BurstService(object):
                         starting_index += 1
                     ### Change the dynamic parameters to point to the last adapter from this portlet execution.
                     visualizer.step_visible = False
-                    if len(workflow_step_list) > 0 and isinstance(workflow_step_list[-1], model.WorkflowStep):
+                    if len(workflow_step_list) > 0 and isinstance(workflow_step_list[-1], WorkflowStep):
                         self.workflow_service.set_dynamic_step_references(visualizer, workflow_step_list[-1].step_index)
                     else:
                         self.workflow_service.set_dynamic_step_references(visualizer, simulator_index)
@@ -399,7 +401,8 @@ class BurstService(object):
         if group_launched:
             ###  For a group of operations, make sure the metric for PSE view 
             ### is also computed, immediately after the simulation.
-            metric_algo = FlowService().get_algorithm_by_module_and_class(MEASURE_METRICS_MODULE, MEASURE_METRICS_CLASS)
+            metric_algo = FlowService().get_algorithm_by_module_and_class(IntrospectionRegistry.MEASURE_METRICS_MODULE,
+                                                                          IntrospectionRegistry.MEASURE_METRICS_CLASS)
             metric_interface = FlowService().prepare_adapter(project_id, metric_algo)
             dynamics = {}
             for entry in metric_interface:
@@ -409,7 +412,7 @@ class BurstService(object):
                 if entry[KEY_TYPE] == TYPE_SELECT:
                     dynamics[entry[KEY_NAME]] = {WorkflowStepConfiguration.DATATYPE_INDEX_KEY: 0,
                                                  WorkflowStepConfiguration.STEP_INDEX_KEY: simulator_index}
-            metric_step = model.WorkflowStep(algorithm_id=metric_algo.id, step_index=simulator_index + 1,
+            metric_step = WorkflowStep(algorithm_id=metric_algo.id, step_index=simulator_index + 1,
                                              static_param={}, dynamic_param=dynamics)
             metric_step.step_visible = False
             workflow_step_list.insert(0, metric_step)
@@ -523,7 +526,7 @@ class BurstService(object):
                     any_stopped = self.operation_service.stop_operation(step.fk_operation) or any_stopped
 
         if any_stopped and burst_entity.status != burst_entity.BURST_CANCELED:
-            self.workflow_service.mark_burst_finished(burst_entity, model.BurstConfiguration.BURST_CANCELED)
+            self.workflow_service.mark_burst_finished(burst_entity, BurstConfiguration.BURST_CANCELED)
             return True
         return False
 
@@ -566,10 +569,10 @@ class BurstService(object):
                 ### Operation removed cascaded.
                 continue
             if oper.fk_operation_group is not None and oper.fk_operation_group not in remaining_op_groups:
-                is_remaining = dao.get_generic_entity(model.OperationGroup, oper.fk_operation_group)
+                is_remaining = dao.get_generic_entity(OperationGroup, oper.fk_operation_group)
                 if len(is_remaining) > 0:
                     remaining_op_groups.add(oper.fk_operation_group)
-                    correct = correct and dao.remove_entity(model.OperationGroup, oper.fk_operation_group)
+                    correct = correct and dao.remove_entity(OperationGroup, oper.fk_operation_group)
             correct = correct and dao.remove_entity(oper.__class__, oper.id)
             service.structure_helper.remove_operation_data(project.name, oper.id)
 
@@ -587,8 +590,8 @@ class BurstService(object):
             for analyze_step in portlet_cfg.analyzers:
                 operation = dao.try_get_operation_by_id(analyze_step.fk_operation)
                 if operation is None:
-                    return model.STATUS_ERROR, "Operation has been removed"
-                if operation.status != model.STATUS_FINISHED:
+                    return STATUS_ERROR, "Operation has been removed"
+                if operation.status != STATUS_FINISHED:
                     return operation.status, operation.additional_info or ''
         else:
             ## Simulator is first step so now decide if we are waiting for input or output ##
@@ -605,7 +608,7 @@ class BurstService(object):
                     error_msg = ("At least one simulation result was not found, it might have been removed. <br\>"
                                  "You can copy and relaunch current simulation, if you are interested in having "
                                  "your results re-computed.")
-                    return model.STATUS_ERROR, error_msg
+                    return STATUS_ERROR, error_msg
                 else:
                     return operation.status, operation.additional_info or ''
-        return model.STATUS_FINISHED, ''
+        return STATUS_FINISHED, ''

@@ -33,10 +33,12 @@
 """
 
 import os
-from tvb.core.entities import model 
 from tvb.adapters.exporters.abcexporter import ABCExporter
 from tvb.core.entities.file.files_helper import FilesHelper
-from tvb.adapters.exporters.exceptions import ExportException 
+from tvb.adapters.exporters.exceptions import ExportException
+from tvb.core.entities.model.model_datatype import DataType
+from tvb.interfaces.neocom._h5loader import DirLoader
+from tvb.interfaces.neocom.config import registry
 
 
 class TVBExporter(ABCExporter):
@@ -46,7 +48,7 @@ class TVBExporter(ABCExporter):
     OPERATION_FOLDER_PREFIX = "Operation_"
     
     def get_supported_types(self):
-        return [model.DataType]
+        return [DataType]
     
     def get_label(self):
         return "TVB Format"
@@ -80,8 +82,10 @@ class TVBExporter(ABCExporter):
             return download_file_name, zip_file, True
 
         else:
-            project_folder = files_helper.get_project_folder(project)
-            data_file = os.path.join(project_folder, data.get_storage_file_path())
+            operation_folder = files_helper.get_operation_folder(project.name, data.fk_from_operation)
+            dir_loader = DirLoader(operation_folder)
+            h5_class = registry.get_h5file_for_index(type(data))
+            data_file = dir_loader.path_for(h5_class, data.gid)
 
             return download_file_name, data_file, False
 

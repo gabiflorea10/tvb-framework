@@ -32,17 +32,30 @@
 .. moduleauthor:: Calin Pavel <calin.pavel@codemart.ro>
 .. moduleauthor:: Lia Domide <lia.domide@codemart.ro>
 """
+import uuid
 
 import numpy
-from tvb.adapters.uploaders.abcuploader import ABCUploader
+from tvb.adapters.uploaders.abcuploader import ABCUploader, ABCUploaderForm
 from tvb.core.entities.file.files_helper import FilesHelper
 from tvb.core.adapters.exceptions import LaunchException
 from tvb.datatypes.connectivity import Connectivity
+from tvb.core.entities.file.datatypes.connectivity_h5 import ConnectivityH5
+from tvb.core.entities.model.datatypes.connectivity import ConnectivityIndex
+from tvb.core.neotraits._forms import UploadField, SimpleSelectField
+from tvb.interfaces.neocom._h5loader import DirLoader
 
-NORMALIZATION_OPTIONS = [
-    {'name': 'None', 'value': 'none'},
-    {'name': 'Region (node)', 'value': 'region'},
-    {'name': 'Absolute (max weight)', 'value': 'tract'}]
+NORMALIZATION_OPTIONS = {'Region (node)':'region', 'Absolute (max weight)':'tract'}
+
+class ZIPConnectivityImporterForm(ABCUploaderForm):
+
+    def __init__(self, prefix='', project_id=None):
+        super(ZIPConnectivityImporterForm, self).__init__(prefix, project_id)
+
+        self.uploaded = UploadField("application/zip", self, name='uploaded', label='Connectivity file (zip)')
+        self.normalization = SimpleSelectField(NORMALIZATION_OPTIONS, self, name='normalization',
+                                               label='Weights Normalization', doc='Normalization mode for weights')
+
+        self.project_id = project_id
 
 
 class ZIPConnectivityImporter(ABCUploader):
@@ -63,20 +76,24 @@ class ZIPConnectivityImporter(ABCUploader):
     CORTICAL_INFO = "cortical"
     HEMISPHERE_INFO = "hemisphere"
 
+    form = None
+
+    def get_input_tree(self):
+        return None
 
     def get_upload_input_tree(self):
-        """
-        Take as input a ZIP archive.
-        """
-        return [{'name': 'uploaded', 'type': 'upload', 'required_type': 'application/zip',
-                 'label': 'Connectivity file (zip)', 'required': True},
+        return None
 
-                {'name': 'normalization', 'label': 'Weights Normalization', 'type': 'select', 'default': 'none',
-                 'options': NORMALIZATION_OPTIONS, 'description': 'Normalization mode for weights'}]
+    def get_form(self):
+        if self.form is None:
+            return ZIPConnectivityImporterForm
+        return self.form
 
+    def set_form(self, form):
+        self.form = form
 
     def get_output(self):
-        return [Connectivity]
+        return [ConnectivityIndex]
 
 
     def launch(self, uploaded, normalization=None):
@@ -129,7 +146,6 @@ class ZIPConnectivityImporter(ABCUploader):
         FilesHelper.remove_files(files, True)
 
         result = Connectivity()
-        result.storage_path = self.storage_path
 
         ### Fill positions
         if centres is None:
@@ -151,7 +167,7 @@ class ZIPConnectivityImporter(ABCUploader):
             if normalization:
                 result.weights = result.scaled_weights(normalization)
 
-        ### Fill and check tracts    
+        ### Fill and check tracts
         if tract_matrix is not None:
             if numpy.any([x < 0 for x in tract_matrix.flatten()]):
                 raise Exception("Negative values are not accepted in tracts matrix! "
@@ -184,4 +200,17 @@ class ZIPConnectivityImporter(ABCUploader):
                 raise Exception("Invalid size for vector hemispheres. "
                                 "Expected the same as region-centers number %d" % expected_number_of_nodes)
             result.hemispheres = hemisphere_vector
-        return result
+
+        result.configure()
+
+        conn_idx = ConnectivityIndex()
+        conn_idx.fill_from_has_traits(result)
+
+        loader = DirLoader(self.storage_path)
+        conn_path = loader.path_for(ConnectivityH5, conn_idx.gid)
+
+        with ConnectivityH5(conn_path) as conn_h5:
+            conn_h5.store(result)
+            conn_h5.gid.store(uuid.UUID(conn_idx.gid))
+
+        return conn_idx

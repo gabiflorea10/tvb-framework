@@ -37,12 +37,10 @@ Entities for Generic DataTypes, Links and Groups of DataTypes are defined here.
 """
 
 from copy import copy
-from datetime import datetime
 from sqlalchemy.orm import relationship, backref
-from sqlalchemy import Boolean, Integer, String, Float, Column, ForeignKey, DateTime
+from sqlalchemy import Boolean, Integer, String, Float, Column, ForeignKey
+from tvb.core.neotraits.db import HasTraitsIndex, Base
 
-from tvb.core.utils import generate_guid
-from tvb.core.entities.model.model_base import Base
 from tvb.core.entities.model.model_project import Project
 from tvb.core.entities.model.model_operation import Operation, OperationGroup
 from tvb.core.entities.model.model_burst import BurstConfiguration
@@ -51,41 +49,40 @@ from tvb.basic.logger.builder import get_logger
 
 LOG = get_logger(__name__)
 
-FILTER_CATEGORIES = {'model.DataType.subject': {'display': 'Subject', 'type': 'string',
+FILTER_CATEGORIES = {'DataType.subject': {'display': 'Subject', 'type': 'string',
                                                 'operations': ['!=', '==', 'like', 'in', 'not in']},
-                     'model.DataType.state': {'display': 'State', 'type': 'string',
+                     'DataType.state': {'display': 'State', 'type': 'string',
                                               'operations': ['!=', '==', 'in', 'not in']},
-                     'model.DataType.disk_size': {'display': 'Disk Size (KB)', 'type': 'int',
+                     'DataType.disk_size': {'display': 'Disk Size (KB)', 'type': 'int',
                                                   'operations': ['<', '==', '>']},
-                     'model.DataType.user_tag_1': {'display': 'Tag 1', 'type': 'string',
+                     'DataType.user_tag_1': {'display': 'Tag 1', 'type': 'string',
                                                    'operations': ['!=', '==', 'like']},
-                     'model.DataType.user_tag_2': {'display': 'Tag 2', 'type': 'string',
+                     'DataType.user_tag_2': {'display': 'Tag 2', 'type': 'string',
                                                    'operations': ['!=', '==', 'like']},
-                     'model.DataType.user_tag_3': {'display': 'Tag 3', 'type': 'string',
+                     'DataType.user_tag_3': {'display': 'Tag 3', 'type': 'string',
                                                    'operations': ['!=', '==', 'like']},
-                     'model.DataType.user_tag_4': {'display': 'Tag 4', 'type': 'string',
+                     'DataType.user_tag_4': {'display': 'Tag 4', 'type': 'string',
                                                    'operations': ['!=', '==', 'like']},
-                     'model.DataType.user_tag_5': {'display': 'Tag 5', 'type': 'string',
+                     'DataType.user_tag_5': {'display': 'Tag 5', 'type': 'string',
                                                    'operations': ['!=', '==', 'like']},
-                     'model.Operation.start_date': {'display': 'Start date', 'type': 'date',
+                     'Operation.start_date': {'display': 'Start date', 'type': 'date',
                                                     'operations': ['!=', '<', '>']},
-                     'model.BurstConfiguration.name': {'display': 'Simulation name', 'type': 'string',
+                     'BurstConfiguration.name': {'display': 'Simulation name', 'type': 'string',
                                                        'operations': ['==', '!=', 'like']},
-                     'model.Operation.completion_date': {'display': 'Completion date', 'type': 'date',
+                     'Operation.completion_date': {'display': 'Completion date', 'type': 'date',
                                                          'operations': ['!=', '<', '>']}}
 
 
 
-class DataType(Base):
+class DataType(HasTraitsIndex):
     """ 
     Base class for DB storage of Types.
     DataTypes, are the common language between Visualizers, 
     Simulator and Analyzers.
 
     """
-    __tablename__ = 'DATA_TYPES'
-    id = Column(Integer, primary_key=True)
-    gid = Column(String, unique=True)
+
+    id = Column(Integer, ForeignKey(HasTraitsIndex.id), primary_key=True)
     type = Column(String)    # Name of class inheriting from current type
     module = Column(String)
     subject = Column(String)
@@ -93,7 +90,6 @@ class DataType(Base):
     visible = Column(Boolean, default=True)
     invalid = Column(Boolean, default=False)
     is_nan = Column(Boolean, default=False)
-    create_date = Column(DateTime, default=datetime.now)
     disk_size = Column(Integer)
     user_tag_1 = Column(String)     # Name used by framework and perpetuated from a DataType to derived entities.
     user_tag_2 = Column(String)
@@ -110,7 +106,7 @@ class DataType(Base):
     #it should be a reference to a DataTypeGroup, but we can not create that FK
     #because this two tables (DATA_TYPES, DATA_TYPES_GROUPS) will reference each
     #other mutually and SQL-Alchemy complains about that.
-    fk_datatype_group = Column(Integer, ForeignKey('DATA_TYPES.id'))
+    fk_datatype_group = Column(Integer, ForeignKey('DataType.id'))
 
     fk_from_operation = Column(Integer, ForeignKey('OPERATIONS.id', ondelete="CASCADE"))
     parent_operation = relationship(Operation, backref=backref("DATA_TYPES", order_by=id, cascade="all,delete"))
@@ -118,10 +114,10 @@ class DataType(Base):
 
     def __init__(self, gid=None, **kwargs):
 
-        if gid is None:
-            self.gid = generate_guid()
-        else:
-            self.gid = gid
+        # if gid is None:
+        #     self.gid = generate_guid()
+        # else:
+        self.gid = gid
         self.type = self.__class__.__name__
         self.module = self.__class__.__module__
 
@@ -182,6 +178,10 @@ class DataType(Base):
         pass
 
 
+class DataTypeMatrix(DataType):
+    id = Column(Integer, ForeignKey(DataType.id), primary_key=True)
+    ndim = Column(Integer)
+
 
 class DataTypeGroup(DataType):
     """
@@ -189,7 +189,7 @@ class DataTypeGroup(DataType):
     """
     __tablename__ = 'DATA_TYPES_GROUPS'
 
-    id = Column('id', Integer, ForeignKey('DATA_TYPES.id', ondelete="CASCADE"), primary_key=True)
+    id = Column('id', Integer, ForeignKey('DataType.id', ondelete="CASCADE"), primary_key=True)
     count_results = Column(Integer)
     no_of_ranges = Column(Integer, default=0)               # Number of ranged parameters
     fk_operation_group = Column(Integer, ForeignKey('OPERATION_GROUPS.id', ondelete="CASCADE"))
@@ -222,7 +222,7 @@ class Links(Base):
 
     id = Column(Integer, primary_key=True)
     fk_to_project = Column(Integer, ForeignKey('PROJECTS.id', ondelete="CASCADE"))
-    fk_from_datatype = Column(Integer, ForeignKey('DATA_TYPES.id', ondelete="CASCADE"))
+    fk_from_datatype = Column(Integer, ForeignKey('DataType.id', ondelete="CASCADE"))
 
     referenced_project = relationship(Project, backref=backref('LINKS', order_by=id, cascade="delete, all"))
     referenced_datatype = relationship(DataType, backref=backref('LINKS', order_by=id, cascade="delete, all"))
@@ -252,7 +252,7 @@ class MeasurePointsSelection(Base):
     #### JSON with node indices in current selection (0-based):
     selected_nodes = Column(String)
     #### A Connectivity of Sensor GID, Referring to the entity that this selection was produced for:
-    fk_datatype_gid = Column(String, ForeignKey('DATA_TYPES.gid', ondelete="CASCADE"))
+    fk_datatype_gid = Column(String, ForeignKey('HasTraitsIndex.gid', ondelete="CASCADE"))
     #### Current Project the selection was defined in:
     fk_in_project = Column(Integer, ForeignKey('PROJECTS.id', ondelete="CASCADE"))
 
@@ -279,7 +279,7 @@ class StoredPSEFilter(Base):
     #### Unique name /DataType, to be displayed in selector UI:
     ui_name = Column(String)
     #### A DataType Group GID, Referring to the Group that this filter was stored for:
-    fk_datatype_gid = Column(String, ForeignKey('DATA_TYPES.gid', ondelete="CASCADE"))
+    fk_datatype_gid = Column(String, ForeignKey('HasTraitsIndex.gid', ondelete="CASCADE"))
 
     threshold_value = Column(Float)
 

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 #
-# TheVirtualBrain-Framework Package. This package holds all Data Management, and 
+# TheVirtualBrain-Framework Package. This package holds all Data Management, and
 # Web-UI helpful to run brain-simulations. To use it, you also need do download
 # TheVirtualBrain-Scientific Package (for simulators). See content of the
 # documentation-folder for more details. See also http://www.thevirtualbrain.org
@@ -28,41 +28,28 @@
 #
 #
 
-"""
-.. moduleauthor:: Mihai Andrei <mihai.andrei@codemart.ro>
-"""
-
-import os
-from tvb.adapters.exporters.abcexporter import ABCExporter
-from tvb.adapters.uploaders.obj.parser import ObjWriter
-from tvb.datatypes.surfaces import Surface
+from tvb.basic.filters.chain import FilterChain
+from tvb.datatypes.sensors import EEG_POLYMORPHIC_IDENTITY
+from tvb.adapters.uploaders.mat_timeseries_importer import MatTimeSeriesImporterForm, TS_EEG, MatTimeSeriesImporter
+from tvb.core.entities.model.datatypes.sensors import SensorsIndex
+from tvb.core.neotraits._forms import DataTypeSelectField
 
 
+class EEGMatTimeSeriesImporterForm(MatTimeSeriesImporterForm):
 
-class ObjSurfaceExporter(ABCExporter):
-    """ 
-    Exports a tvb surface geometry in the obj format.
-    """
-
-
-    def get_supported_types(self):
-        return [Surface]
-
-
-    def get_label(self):
-        return "Obj Format"
+    def __init__(self, prefix='', project_id=None):
+        super(EEGMatTimeSeriesImporterForm, self).__init__(prefix, project_id)
+        eeg_conditions = FilterChain(fields=[FilterChain.datatype + '.sensors_type'], operations=['=='],
+                                     values=[EEG_POLYMORPHIC_IDENTITY])
+        self.eeg = DataTypeSelectField(SensorsIndex, self, name='tstype_parameters', required=True,
+                                       conditions=eeg_conditions, label='EEG Sensors')
 
 
-    def export(self, data, export_folder, project):
-        download_file_name = self.get_export_file_name(data)
-        data_file = os.path.join(export_folder, download_file_name)
+class EEGMatTimeSeriesImporter(MatTimeSeriesImporter):
+    _ui_name = "Timeseries EEG MAT"
+    tstype = TS_EEG
 
-        with open(data_file, 'w') as f:
-            w = ObjWriter(f)
-            w.write(data.vertices, data.triangles, data.vertex_normals, comment="exported from %s" % str(data))
-
-        return download_file_name, data_file, False
-
-
-    def get_export_file_extension(self, data):
-        return "obj"
+    def get_form(self):
+        if self.form is None:
+            return EEGMatTimeSeriesImporterForm
+        return self.form

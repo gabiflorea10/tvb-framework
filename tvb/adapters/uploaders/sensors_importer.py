@@ -32,13 +32,31 @@
 .. moduleauthor:: Bogdan Neacsa <bogdan.neacsa@codemart.ro>
 """
 
+import uuid
 import numpy
-import scipy.io
-import collections
-from tvb.adapters.uploaders.abcuploader import ABCUploader
+from tvb.adapters.uploaders.abcuploader import ABCUploader, ABCUploaderForm
 from tvb.basic.logger.builder import get_logger
 from tvb.core.adapters.exceptions import LaunchException
-from tvb.datatypes.sensors import Sensors, SensorsEEG, SensorsMEG, SensorsInternal
+from tvb.datatypes.sensors import SensorsEEG, SensorsMEG, SensorsInternal
+from tvb.core.entities.file.datatypes.sensors_h5 import SensorsH5
+from tvb.core.entities.model.datatypes.sensors import SensorsIndex
+from tvb.core.neotraits._forms import UploadField, SimpleSelectField
+from tvb.interfaces.neocom._h5loader import DirLoader
+
+
+class SensorsImporterForm(ABCUploaderForm):
+    options = {'EEG Sensors': SensorsEEG.sensors_type.default,
+               'MEG Sensors': SensorsMEG.sensors_type.default,
+               'Internal Sensors': SensorsInternal.sensors_type.default}
+
+    def __init__(self, prefix='', project_id=None):
+        super(SensorsImporterForm, self).__init__(prefix, project_id)
+
+        self.sensors_file = UploadField('text/plain, .bz2', self, name='sensors_file', required=True,
+                                  label='Please upload sensors file (txt or bz2 format)',
+                                  doc='Expected a text/bz2 file containing sensor measurements.')
+        self.sensors_type = SimpleSelectField(self.options, self, name='sensors_type', required=True,
+                                              label='Sensors type: ')
 
 
 class Sensors_Importer(ABCUploader):
@@ -49,29 +67,24 @@ class Sensors_Importer(ABCUploader):
     _ui_subsection = "sensors_importer"
     _ui_description = "Import Sensor locations from TXT or BZ2"
 
-    EEG_SENSORS = "EEG Sensors"
-    MEG_SENSORS = "MEG sensors"
-    INTERNAL_SENSORS = "Internal Sensors"
     logger = get_logger(__name__)
 
+    form = None
 
-    def get_upload_input_tree(self):
-        """
-        Define input parameters for this importer.
-        """
-        return [{'name': 'sensors_file', 'type': 'upload', 'required_type': 'text/plain, .bz2',
-                 'label': 'Please upload sensors file (txt or bz2 format)', 'required': True,
-                 'description': 'Expected a text/bz2 file containing sensor measurements.'},
-                
-                {'name': 'sensors_type', 'type': 'select', 
-                 'label': 'Sensors type: ', 'required': True,
-                 'options': [{'name': self.EEG_SENSORS, 'value': self.EEG_SENSORS},
-                             {'name': self.MEG_SENSORS, 'value': self.MEG_SENSORS},
-                             {'name': self.INTERNAL_SENSORS, 'value': self.INTERNAL_SENSORS}]
-                 }]
+    def get_input_tree(self): return None
+
+    def get_upload_input_tree(self): return None
+
+    def get_form(self):
+        if self.form is None:
+            return SensorsImporterForm
+        return self.form
+
+    def set_form(self, form):
+        self.form = form
 
     def get_output(self):
-        return [Sensors]
+        return [SensorsIndex]
 
 
     def launch(self, sensors_file, sensors_type):
@@ -92,17 +105,16 @@ class Sensors_Importer(ABCUploader):
             raise LaunchException("Please select sensors file which contains data to import")
 
         self.logger.debug("Create sensors instance")
-        if sensors_type == self.EEG_SENSORS:
+        if sensors_type == SensorsEEG.sensors_type.default:
             sensors_inst = SensorsEEG()
-        elif sensors_type == self.MEG_SENSORS:
+        elif sensors_type == SensorsMEG.sensors_type.default:
             sensors_inst = SensorsMEG()
-        elif sensors_type == self.INTERNAL_SENSORS:
+        elif sensors_type == SensorsInternal.sensors_type.default:
             sensors_inst = SensorsInternal()
         else:
             exception_str = "Could not determine sensors type (selected option %s)" % sensors_type
             raise LaunchException(exception_str)
             
-        sensors_inst.storage_path = self.storage_path
         locations = self.read_list_data(sensors_file, usecols=[1, 2, 3])
 
         # NOTE: TVB has the nose pointing -y and left ear pointing +x
@@ -111,73 +123,33 @@ class Sensors_Importer(ABCUploader):
         # locations = numpy.array([[0, 1, 0], [-1, 0, 0], [0, 0, 1]]).dot(locations.T).T
         sensors_inst.locations = locations
         sensors_inst.labels = self.read_list_data(sensors_file, dtype=numpy.str, usecols=[0])
-        
+        sensors_inst.number_of_sensors = sensors_inst.labels.size
+
         if isinstance(sensors_inst, SensorsMEG):
             try:
                 sensors_inst.orientations = self.read_list_data(sensors_file, usecols=[4, 5, 6])
+                sensors_inst.has_orientation = True
             except IndexError:
                 raise LaunchException("Uploaded file does not contains sensors orientation.")
-         
+
+        sensors_inst.configure()
         self.logger.debug("Sensors instance ready to be stored")
-        
-        return [sensors_inst]
-    
-    
-class BrainstormSensorUploader(ABCUploader):
-    "Upload sensors from Brainstorm database files"
 
-    _ui_name = "Sensors Brainstorm"
-    _ui_subsection = "sensors_importer"
-    _ui_description = "Upload a description of s/M/EEG sensors from a Brainstorm database file."
+        sensors_idx = SensorsIndex()
+        sensors_idx.number_of_sensors = sensors_inst.number_of_sensors
+        sensors_idx.sensors_type = sensors_inst.sensors_type
 
-    _bst_type_to_class = {
-        'SEEG': SensorsInternal,
-        'EEG': SensorsEEG,
-        'MEG': SensorsMEG,
-    }
+        loader = DirLoader(self.storage_path)
+        sensors_path = loader.path_for(SensorsH5, sensors_idx.gid)
+        sensors_h5 = SensorsH5(sensors_path)
 
-    def get_upload_input_tree(self):
-        return [{'name': 'filename', 'type': 'upload', 'required_type': '.mat',
-                 'label': 'Sensors file', 'required': True,
-                 'description': 'Brainstorm file described s/M/EEG sensors.'}]
+        sensors_h5.gid.store(uuid.UUID(sensors_idx.gid))
+        sensors_h5.sensors_type.store(sensors_inst.sensors_type)
+        sensors_h5.labels.store(sensors_inst.labels)
+        sensors_h5.locations.store(sensors_inst.locations)
+        sensors_h5.has_orientation.store(sensors_inst.has_orientation)
+        sensors_h5.orientations.store(sensors_inst.orientations)
+        sensors_h5.number_of_sensors.store(sensors_inst.number_of_sensors)
+        sensors_h5.usable.store(sensors_inst.usable)
 
-    def get_output(self):
-        return [Sensors]
-
-    def launch(self, filename):
-        # get & verify data
-        if filename is None:
-            raise LaunchException("Please provide a valid filename.")
-        mat = scipy.io.loadmat(filename)
-        please_verify = ('Please verify that the provided file is a valid sensors file '
-                         'from a Brainstorm database.')
-        if 'Channel' not in mat:
-            raise LaunchException(please_verify)
-        chans = mat['Channel']
-        chan_fields = chans.dtype.fields.keys()
-        req_fields = 'Name Type Loc Orient'.split()
-        if any(key not in chan_fields for key in req_fields):
-            raise LaunchException(please_verify)
-        # guess majority channel type (i.e. ignore EOG, TRIGGER, etc.)
-        chtypes = [ch[0] for ch in chans['Type'][0]]
-        type_ctr = collections.Counter(chtypes)
-        (chtype, _), = type_ctr.most_common(1)
-        sens_cls = self._bst_type_to_class[chtype]
-        sens = sens_cls(storage_path=self.storage_path)
-        ":type : Sensors"
-        # workaround: locations & orientations must be homogeneous arrays
-        # but in real data, channel types aren't homogeneous so neither are
-        # locations nor orientations. Find first chan with guessed type, create
-        # dummy locations with correct shape, and set sensors locations as
-        # the real locations or dummy if doesn't match
-        sens.usable = numpy.array([_ == chtype for _ in chtypes])
-        i_type, = numpy.where(sens.usable)
-        _ = numpy.zeros(chans['Loc'][0][i_type[0]].shape)
-        loc = numpy.array([ch if ch.shape==_.shape else _ for ch in chans['Loc'][0]])
-        sens.locations = loc[..., 0] * 1e3
-        sens.labels = numpy.array([str(ch[0]) for ch in chans['Name'][0]])
-        if isinstance(sens, SensorsMEG):
-            _ = numpy.zeros(chans['Orient'][0][i_type[0]].shape)
-            sens.orientations = numpy.array(
-                [ch if ch.shape==_.shape else _ for ch in chans['Orient'][0]])
-        return [sens]
+        return sensors_idx

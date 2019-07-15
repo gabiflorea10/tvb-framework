@@ -35,6 +35,7 @@ given action are described here.
 .. moduleauthor:: Lia Domide <lia.domide@codemart.ro>
 """
 
+import os
 import copy
 import json
 import cherrypy
@@ -44,7 +45,6 @@ import six
 from tvb.basic.filters.chain import FilterChain
 from tvb.core.adapters import constants
 from tvb.core.adapters.input_tree import InputTreeManager, MAXIMUM_DATA_TYPES_DISPLAYED, KEY_WARNING, WARNING_OVERFLOW
-from tvb.datatypes.arrays import MappedArray
 from tvb.core.utils import url2path, parse_json_parameters, string2date, string2bool
 from tvb.core.entities.file.files_helper import FilesHelper
 from tvb.core.adapters.abcdisplayer import ABCDisplayer
@@ -53,12 +53,13 @@ from tvb.core.services.exceptions import OperationException
 from tvb.core.services.operation_service import OperationService, RANGE_PARAMETER_1, RANGE_PARAMETER_2
 from tvb.core.services.project_service import ProjectService
 from tvb.core.services.burst_service import BurstService
+from tvb.interfaces.neocom.h5 import DirLoader
+from tvb.interfaces.neocom.config import registry
 from tvb.interfaces.web.controllers import common
 from tvb.interfaces.web.controllers.base_controller import BaseController
 from tvb.interfaces.web.controllers.decorators import expose_page, settings, context_selected, expose_numpy_array
 from tvb.interfaces.web.controllers.decorators import expose_fragment, handle_error, check_user, expose_json
 from tvb.interfaces.web.entities.context_selected_adapter import SelectedAdapterContext
-
 
 KEY_CONTENT = ABCDisplayer.KEY_CONTENT
 FILTER_FIELDS = "fields"
@@ -291,6 +292,8 @@ class FlowController(BaseController):
         if not string2bool(str(reset_session)) and session_dict is not None:
             starts_with_str = select_name + "_" + parameters_prefix + "_"
             ui_sel_items = dict((k, v) for k, v in session_dict.items() if k.startswith(starts_with_str))
+            from tvb.datatypes.arrays import MappedArray
+
             dimensions, selected_agg_functions, required_dimension, _ = MappedArray().parse_selected_items(ui_sel_items)
         template_params["selected_items"] = dimensions
         template_params["selected_functions"] = selected_agg_functions
@@ -461,7 +464,20 @@ class FlowController(BaseController):
         adapter_instance = ABCAdapter.build_adapter(algorithm)
 
         try:
-            result = self.flow_service.fire_operation(adapter_instance, common.get_logged_user(), project_id, **data)
+            #TODO: this currently keeps both ways to display forms
+            if adapter_instance.get_input_tree() is None:
+                form = adapter_instance.get_form()(project_id=project_id)
+                form.fill_from_post(data)
+                dt_dict = None
+                if form.validate():
+                    dt_dict = form.get_dict()
+                if dt_dict is None:
+                    raise ValueError("Could not build a dict out of this form!")
+                adapter_instance.set_form(form)
+                result = self.flow_service.fire_operation(adapter_instance, common.get_logged_user(), project_id, **dt_dict)
+            else:
+                result = self.flow_service.fire_operation(adapter_instance, common.get_logged_user(), project_id,
+                                                          **data)
 
             # Store input data in session, for informing user of it.
             step = self.flow_service.get_category_by_id(step_key)
@@ -505,23 +521,32 @@ class FlowController(BaseController):
             # Cache some values in session, for performance
             previous_tree = self.context.get_current_input_tree()
             previous_sub_step = self.context.get_current_substep()
-            if not session_reset and previous_tree is not None and previous_sub_step == stored_adapter.id:
-                adapter_interface = previous_tree
-            else:
-                adapter_interface = self.flow_service.prepare_adapter(project_id, stored_adapter)
-                self.context.add_adapter_to_session(stored_adapter, adapter_interface)
 
             category = self.flow_service.get_category_by_id(step_key)
             title = "Fill parameters for step " + category.displayname.lower()
             if group:
                 title = title + " - " + group.displayname
 
-            current_defaults = self.context.get_current_default()
-            if current_defaults is not None:
-                # Change default values in tree, according to selected input
-                adapter_interface = InputTreeManager.fill_defaults(adapter_interface, current_defaults)
+            adapter_instance = self.flow_service.prepare_adapter(stored_adapter)
 
-            template_specification = dict(submitLink=submit_url, inputList=adapter_interface, title=title)
+            if adapter_instance.get_input_tree() is None:
+                adapter_form = self.flow_service.prepare_adapter_form(adapter_instance, project_id)
+                template_specification = dict(submitLink=submit_url, form=adapter_form, title=title)
+
+            # TODO: to be removed when all forms are migrated
+            else:
+                if not session_reset and previous_tree is not None and previous_sub_step == stored_adapter.id:
+                    adapter_interface = previous_tree
+                else:
+                    adapter_interface = self.flow_service.prepare_adapter_tree_interface(adapter_instance, project_id, stored_adapter.fk_category)
+                    self.context.add_adapter_to_session(stored_adapter, adapter_interface)
+
+                current_defaults = self.context.get_current_default()
+                if current_defaults is not None:
+                    # Change default values in tree, according to selected input
+                    adapter_interface = InputTreeManager.fill_defaults(adapter_interface, current_defaults)
+
+                template_specification = dict(submitLink=submit_url, inputList=adapter_interface, title=title)
             self._populate_section(stored_adapter, template_specification, is_burst)
             return template_specification
         except OperationException as oexc:
@@ -550,18 +575,69 @@ class FlowController(BaseController):
         self.logger.debug("Starting to read HDF5: " + entity_gid + "/" + dataset_name + "/" + str(kwargs))
         entity = ABCAdapter.load_entity_by_gid(entity_gid)
 
+        storage_path = self.files_helper.get_project_folder(entity.parent_operation.project, str(entity.fk_from_operation))
+        loader = DirLoader(storage_path)
+        entity_path = loader.find_file_name(entity.gid)
+        entity_h5_cls = registry.get_h5file_for_index(type(entity))
+
+        entity_dt = registry.get_datatype_for_h5file(entity_h5_cls)()
+        with entity_h5_cls(os.path.join(storage_path, entity_path)) as entity_h5:
+            entity_h5.load_into(entity_dt)
+
         datatype_kwargs = json.loads(datatype_kwargs)
         if datatype_kwargs:
             for key, value in six.iteritems(datatype_kwargs):
                 kwargs[key] = ABCAdapter.load_entity_by_gid(value)
 
-        result = getattr(entity, dataset_name)
+        result = getattr(entity_dt, dataset_name)
         if callable(result):
             if kwargs:
                 result = result(**kwargs)
             else:
                 result = result()
         return result
+
+
+    @expose_json
+    def invoke_adapter(self, algo_id, method_name, entity_gid, **kwargs):
+        algorithm = self.flow_service.get_algorithm_by_identifier(algo_id)
+        adapter_instance = ABCAdapter.build_adapter(algorithm)
+        entity = ABCAdapter.load_entity_by_gid(entity_gid)
+        storage_path = self.files_helper.get_project_folder(entity.parent_operation.project,
+                                                            str(entity.fk_from_operation))
+        adapter_instance.storage_path = storage_path
+        method = getattr(adapter_instance, method_name)
+        if kwargs:
+            return method(entity_gid, **kwargs)
+        return method(entity_gid)
+
+
+    @expose_json
+    def read_from_h5_file(self, entity_gid, method_name, flatten=False, datatype_kwargs='null', **kwargs):
+        self.logger.debug("Starting to read HDF5: " + entity_gid + "/" + method_name + "/" + str(kwargs))
+        entity = ABCAdapter.load_entity_by_gid(entity_gid)
+
+        storage_path = self.files_helper.get_project_folder(entity.parent_operation.project,
+                                                            str(entity.fk_from_operation))
+        loader = DirLoader(storage_path)
+        entity_path = loader.find_file_name(entity.gid)
+        entity_h5_class = registry.get_h5file_for_index(type(entity))
+
+        entity_h5 = entity_h5_class(os.path.join(storage_path, entity_path))
+
+        datatype_kwargs = json.loads(datatype_kwargs)
+        if datatype_kwargs:
+            for key, value in six.iteritems(datatype_kwargs):
+                kwargs[key] = ABCAdapter.load_entity_by_gid(value)
+
+        result = getattr(entity_h5, method_name)
+        if kwargs:
+            result = result(**kwargs)
+        else:
+            result = result()
+
+        entity_h5.close()
+        return self._prepare_result(result, flatten)
 
 
     @expose_json
@@ -580,7 +656,11 @@ class FlowController(BaseController):
 
         """
         result = self._read_datatype_attribute(entity_gid, dataset_name, datatype_kwargs, **kwargs)
+        return self._prepare_result(result, flatten)
 
+
+
+    def _prepare_result(self, result, flatten):
         if isinstance(result, numpy.ndarray):
             # for ndarrays honor the flatten kwarg and convert to lists as ndarrs are not json-able
             if flatten is True or flatten == "True":

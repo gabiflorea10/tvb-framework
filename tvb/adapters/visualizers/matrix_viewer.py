@@ -33,15 +33,20 @@
 
 """
 
+import os
 import json
 import numpy
 from tvb.basic.filters.chain import FilterChain
 from tvb.basic.arguments_serialisation import parse_slice, slice_str
-from tvb.datatypes.arrays import MappedArray
+from tvb.core.adapters.abcadapter import ABCAdapterForm
 from tvb.core.adapters.abcdisplayer import ABCDisplayer
-from tvb.datatypes.time_series import TimeSeriesRegion
+from tvb.core.entities.model.datatypes.spectral import DataTypeMatrix
+from tvb.core.neotraits._forms import DataTypeSelectField, SimpleStrField
+from tvb.interfaces.neocom.h5 import DirLoader
+from tvb.interfaces.neocom.config import registry
 
 
+# TODO: rewrite, necessary to read whole matrix?
 def compute_2d_view(matrix, slice_s):
     """
     Create a 2d view of the matrix using the suggested slice
@@ -116,34 +121,72 @@ class MappedArraySVGVisualizerMixin(object):
                          matrix_labels=json.dumps(labels))
         return view_pars
 
-    def _get_associated_connectivity_labeling(self, datatype):
+    def _extract_labels_and_data_matrix(self, datatype_index):
         """
         If datatype has a source attribute of type TimeSeriesRegion
         then the labels of the associated connectivity are returned.
         Else None
         """
-        source = self.load_entity_by_gid(datatype.source.gid)  # function exists in the mixin target
-        if isinstance(source, TimeSeriesRegion):
+        h5_class = registry.get_h5file_for_index(type(datatype_index))
+        dir_loader = DirLoader(os.path.join(os.path.dirname(self.storage_path),
+                                            str(datatype_index.fk_from_operation)))
+        h5_path = dir_loader.path_for(h5_class, datatype_index.gid)
+        with h5_class(h5_path) as datatype_h5:
+            source_gid = datatype_h5.source.load()
+            matrix = datatype_h5.array_data[:]
+
+        source_h5_class, source_h5_path = self._load_h5_of_gid(source_gid.hex)
+        with source_h5_class(source_h5_path) as source_h5:
             # todo should we use connectivity.ordered_labels?
             # If so also permute the matrix to be consistent with the conn views
-            labels = source.connectivity.region_labels.tolist()
-            return [labels, labels]
+            labels = self.get_space_labels(source_h5)
+
+        return [labels, labels], matrix
+
+
+class MatrixVisualizerForm(ABCAdapterForm):
+
+    def __init__(self, prefix='', project_id=None):
+        super(MatrixVisualizerForm, self).__init__(prefix, project_id, False)
+        self.datatype = DataTypeSelectField(self.get_required_datatype(), self, name='datatype', required=True,
+                                            label='Array data type', conditions=self.get_filters())
+        self.slice = SimpleStrField(self, name='slice', label='slice indices in numpy syntax')
+
+    @staticmethod
+    def get_input_name():
+        return '_datatype'
+
+    @staticmethod
+    def get_filters():
+        return FilterChain(fields=[FilterChain.datatype + '.ndim'], operations=[">="], values=[2])
+
+    @staticmethod
+    def get_required_datatype():
+        return DataTypeMatrix
 
 
 class MappedArrayVisualizer(MappedArraySVGVisualizerMixin, ABCDisplayer):
     _ui_name = "Matrix Visualizer"
     _ui_subsection = "matrix"
+    form = None
 
-    def get_input_tree(self):
-        return [{'name': 'datatype', 'label': 'Array data type',
-                 'type': MappedArray, 'required': True,
-                 'conditions': FilterChain(fields=[FilterChain.datatype + '._nr_dimensions'],
-                                           operations=[">="], values=[2])},
-                {'name': 'slice', 'label': 'slice indices in numpy syntax',
-                 'type': 'str', 'required': False}]
+    def get_input_tree(self): return None
+
+    def get_form(self):
+        if self.form is None:
+            return MatrixVisualizerForm
+        return self.form
+
+    def set_form(self, form):
+        self.form = form
 
     def launch(self, datatype, slice=''):
-        matrix = datatype.get_data('array_data')
+        loader = DirLoader(os.path.join(os.path.dirname(self.storage_path), str(datatype.fk_from_operation)))
+        h5_class = registry.get_h5file_for_index(type(datatype))
+        h5_path = loader.path_for(h5_class, datatype.gid)
+        with h5_class(h5_path) as h5_file:
+            matrix = h5_file.array_data.load()
+
         matrix2d, _, _ = compute_2d_view(matrix, slice)
         title = datatype.display_name + " matrix plot"
 
