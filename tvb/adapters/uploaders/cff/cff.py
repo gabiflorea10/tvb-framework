@@ -61,7 +61,6 @@
 #
 
 import sys
-import getopt
 import re as re_
 
 etree_ = None
@@ -202,26 +201,6 @@ except ImportError as exp:
             if tag:
                 path_list.append(tag)
             self.get_path_list_(node.getparent(), path_list)
-
-
-#
-# If you have installed IPython you can uncomment and use the following.
-# IPython is available from http://ipython.scipy.org/.
-#
-
-## from IPython.Shell import IPShellEmbed
-## args = ''
-## ipshell = IPShellEmbed(args,
-##     banner = 'Dropping into IPython',
-##     exit_msg = 'Leaving Interpreter, back to program.')
-
-# Then use the following line where and when you want to drop into the
-# IPython shell:
-#    ipshell('<some message> -- Entering ipshell.\nHit Ctrl-D to exit')
-
-#
-# Globals
-#
 
 ExternalEncoding = 'ascii'
 Tag_pattern_ = re_.compile(r'({.*})?(.*)')

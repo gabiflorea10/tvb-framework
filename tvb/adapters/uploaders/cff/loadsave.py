@@ -60,9 +60,6 @@
 #
 #
 
-#import cfflib_modified as cfflib
-#import cfflib
-
 from . import cfflib2 as cf
 
 import os.path as op
