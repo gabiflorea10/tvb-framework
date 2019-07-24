@@ -48,7 +48,6 @@ from tvb.core.entities.file.exceptions import FileStructureException, MissingDat
 from tvb.core.entities.file.exceptions import IncompatibleFileManagerException, MissingDataFileException
 from tvb.core.entities.transient.structure_entities import GenericMetaData
 
-
 # Create logger for this module
 LOG = get_logger(__name__)
 
@@ -100,7 +99,7 @@ class HDF5StorageManager(object):
     def store_data(self, dataset_name, data_list, where=ROOT_NODE_PATH):
         """
         This method stores provided data list into a data set in the H5 file.
-        
+
         :param dataset_name: Name of the data set where to store data
         :param data_list: Data to be stored
         :param where: represents the path where to store our dataset (e.g. /data/info)
@@ -136,14 +135,14 @@ class HDF5StorageManager(object):
     def append_data(self, dataset_name, data_list, grow_dimension=-1, close_file=True, where=ROOT_NODE_PATH):
         """
         This method appends data to an existing data set. If the data set does not exists, create it first.
-        
+
         :param dataset_name: Name of the data set where to store data
         :param data_list: Data to be stored / appended
         :param grow_dimension: The dimension to be used to grow stored array. By default will grow on the LAST dimension
-        :param close_file: Specify if the file should be closed automatically after write operation. If not, 
+        :param close_file: Specify if the file should be closed automatically after write operation. If not,
             you have to close file by calling method close_file()
         :param where: represents the path where to store our dataset (e.g. /data/info)
-        
+
         """
         if dataset_name is None:
             dataset_name = ''
@@ -181,10 +180,10 @@ class HDF5StorageManager(object):
     def remove_data(self, dataset_name, where=ROOT_NODE_PATH):
         """
         Deleting a data set from H5 file.
-        
+
         :param dataset_name:name of the data set to be deleted
         :param where: represents the path where dataset is stored (e.g. /data/info)
-          
+
         """
         LOG.debug("Removing data set: %s" % dataset_name)
         if dataset_name is None:
@@ -206,12 +205,12 @@ class HDF5StorageManager(object):
     def get_data(self, dataset_name, data_slice=None, where=ROOT_NODE_PATH, ignore_errors=False, close_file=True):
         """
         This method reads data from the given data set based on the slice specification
-        
+
         :param dataset_name: Name of the data set from where to read data
         :param data_slice: Specify how to retrieve data from array {e.g (slice(1,10,1),slice(1,6,2)) }
-        :param where: represents the path where dataset is stored (e.g. /data/info)  
+        :param where: represents the path where dataset is stored (e.g. /data/info)
         :returns: a numpy.ndarray containing filtered data
-        
+
         """
         LOG.debug("Reading data from data set: %s" % dataset_name)
         if dataset_name is None:
@@ -246,12 +245,12 @@ class HDF5StorageManager(object):
 
     def get_data_shape(self, dataset_name, where=ROOT_NODE_PATH, ignore_errors=False):
         """
-        This method reads data-size from the given data set 
-        
+        This method reads data-size from the given data set
+
         :param dataset_name: Name of the data set from where to read data
-        :param where: represents the path where dataset is stored (e.g. /data/info)  
+        :param where: represents the path where dataset is stored (e.g. /data/info)
         :returns: a tuple containing data size
-        
+
         """
         LOG.debug("Reading data from data set: %s" % dataset_name)
         if dataset_name is None:
@@ -277,12 +276,12 @@ class HDF5StorageManager(object):
     def set_metadata(self, meta_dictionary, dataset_name='', tvb_specific_metadata=True, where=ROOT_NODE_PATH):
         """
         Set meta-data information for root node or for a given data set.
-        
+
         :param meta_dictionary: dictionary containing meta info to be stored on node
         :param dataset_name: name of the dataset where to assign metadata. If None, metadata is assigned to ROOT node.
         :param tvb_specific_metadata: specify if the provided metadata is TVB specific (All keys will have a TVB prefix)
-        :param where: represents the path where dataset is stored (e.g. /data/info)     
-        
+        :param where: represents the path where dataset is stored (e.g. /data/info)
+
         """
         LOG.debug("Setting metadata on node: %s" % dataset_name)
         if dataset_name is None:
@@ -313,17 +312,17 @@ class HDF5StorageManager(object):
 
     def _serialize_value(self, value):
         """
-        This method takes a value which will be stored as metadata and 
+        This method takes a value which will be stored as metadata and
         apply some transformation if necessary
-        
+
         :param value: value which is planned to be stored
         :returns:  value to be stored
-        
+
         """
         if value is None:
             return ''
         # Force unicode strings to simple strings.
-        if isinstance(value, unicode):
+        if isinstance(value, str):
             return str(value)
         # Transform boolean to string and prefix it
         elif isinstance(value, bool):
@@ -338,13 +337,13 @@ class HDF5StorageManager(object):
     def remove_metadata(self, meta_key, dataset_name='', tvb_specific_metadata=True, where=ROOT_NODE_PATH):
         """
         Remove meta-data information for root node or for a given data set.
-        
+
         :param meta_key: name of the metadata attribute to be removed
-        :param dataset_name: name of the dataset from where to delete metadata. 
+        :param dataset_name: name of the dataset from where to delete metadata.
             If None, metadata will be removed from ROOT node.
         :param tvb_specific_metadata: specify if the provided metadata is specific to TVB (keys will have a TVB prefix).
         :param where: represents the path where dataset is stored (e.g. /data/info)
-             
+
         """
         LOG.debug("Deleting metadata: %s for dataset: %s" % (meta_key, dataset_name))
         if dataset_name is None:
@@ -374,11 +373,11 @@ class HDF5StorageManager(object):
     def get_metadata(self, dataset_name='', where=ROOT_NODE_PATH, ignore_errors=False):
         """
         Retrieve ALL meta-data information for root node or for a given data set.
-        
+
         :param dataset_name: name of the dataset for which to read metadata. If None, read metadata from ROOT node.
-        :param where: represents the path where dataset is stored (e.g. /data/info)  
+        :param where: represents the path where dataset is stored (e.g. /data/info)
         :returns: a dictionary containing all metadata associated with the node
-        
+
         """
         LOG.debug("Retrieving metadata for dataset: %s" % dataset_name)
         if dataset_name is None:
@@ -458,7 +457,7 @@ class HDF5StorageManager(object):
 
     def _deserialize_value(self, value):
         """
-        This method takes value loaded from H5 file and transform it to TVB data. 
+        This method takes value loaded from H5 file and transform it to TVB data.
         """
         if value is not None:
             if isinstance(value, numpy.string_):
@@ -554,12 +553,12 @@ class HDF5StorageManager(object):
     # -------------- Private methods  --------------
     def __open_h5_file(self, mode='a'):
         """
-        Open file for reading, writing or append. 
-        
+        Open file for reading, writing or append.
+
         :param mode: Mode to open file (possible values are w / r / a).
                     Default value is 'a', to allow adding multiple data to the same file.
         :returns: returns the file which stores data in HDF5 format opened for read / write according to mode param
-        
+
         """
         if self.__storage_full_name is None:
             raise FileStructureException("Invalid storage file. Please provide a valid path.")

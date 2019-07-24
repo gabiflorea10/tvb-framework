@@ -55,7 +55,7 @@ class DirLoader(object):
 
     def find_file_name(self, gid):
         # type: (typing.Union[uuid.UUID, str]) -> str
-        if isinstance(gid, basestring):
+        if isinstance(gid, str):
             gid = uuid.UUID(gid)
 
         fname = self._locate(gid)
@@ -104,7 +104,7 @@ class DirLoader(object):
         """
         where will this Loader expect to find a file of this format and with this gid
         """
-        if isinstance(gid, basestring):
+        if isinstance(gid, str):
             gid = uuid.UUID(gid)
         datatype_cls = registry.get_datatype_for_h5file(h5_file_class)
         fname = '{}_{}.h5'.format(datatype_cls.__name__, gid.hex)

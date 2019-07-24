@@ -29,19 +29,18 @@
 #
 
 """
+.. moduleauthor:: Gabriel Florea <gabriel.florea@codemart.ro>
 .. moduleauthor:: Lia Domide <lia.domide@codemart.ro>
 .. moduleauthor:: Bogdan Neacsa <bogdan.neacsa@codemart.ro>
 """
 
 import os
-import sys
 import shutil
-import cStringIO
 import uuid
-from cfflib import load
 from tempfile import gettempdir
 from zipfile import ZipFile, ZIP_DEFLATED
 from tvb.adapters.uploaders.abcuploader import ABCUploader
+from tvb.adapters.uploaders.cff import load
 from tvb.adapters.uploaders.networkx_connectivity.parser import NetworkxParser
 from tvb.adapters.uploaders.gifti.parser import GIFTIParser
 from tvb.basic.logger.builder import get_logger
@@ -105,65 +104,49 @@ class CFF_Importer(ABCUploader):
         if cff is None:
             raise LaunchException("Please select CFF file which contains data to import")
 
-        # !! CFF does logging by the means of `print` statements. We don't want these
-        # logged to terminal as sys.stdout since we no longer have any control over them
-        # so just buffer everything to a StringIO object and log them after operation is done.
-        default_stdout = sys.stdout
-        custom_stdout = cStringIO.StringIO()
-        sys.stdout = custom_stdout
+        conn_obj = load(cff)
+        network = conn_obj.get_connectome_network()
+        surfaces = conn_obj.get_connectome_surface()
+        warning_message = ""
+        results = []
+        loader = DirLoader(self.storage_path)
 
-        try:
-            conn_obj = load(cff)
-            network = conn_obj.get_connectome_network()
-            surfaces = conn_obj.get_connectome_surface()
-            warning_message = ""
-            results = []
-            loader = DirLoader(self.storage_path)
+        if network:
+            partial = self._parse_connectome_network(network, warning_message, **kwargs)
+            for conn in partial:
+                conn_idx = ConnectivityIndex()
+                conn_idx.fill_from_has_traits(conn)
 
-            if network:
-                partial = self._parse_connectome_network(network, warning_message, **kwargs)
-                for conn in partial:
-                    conn_idx = ConnectivityIndex()
-                    conn_idx.fill_from_has_traits(conn)
+                conn_h5_path = loader.path_for(ConnectivityH5, conn_idx.gid)
+                with ConnectivityH5(conn_h5_path) as conn_h5:
+                    conn_h5.store(conn)
+                    conn_h5.gid.store(uuid.UUID(conn_idx.gid))
+                results.append(conn_idx)
 
-                    conn_h5_path = loader.path_for(ConnectivityH5, conn_idx.gid)
-                    with ConnectivityH5(conn_h5_path) as conn_h5:
-                        conn_h5.store(conn)
-                        conn_h5.gid.store(uuid.UUID(conn_idx.gid))
-                    results.append(conn_idx)
+        if surfaces:
+            partial = self._parse_connectome_surfaces(surfaces, warning_message, should_center)
 
-            if surfaces:
-                partial = self._parse_connectome_surfaces(surfaces, warning_message, should_center)
+            for surf in partial:
+                surf_idx = SurfaceIndex()
+                surf_idx.fill_from_has_traits(surf)
 
-                for surf in partial:
-                    surf_idx = SurfaceIndex()
-                    surf_idx.fill_from_has_traits(surf)
-
-                    surf_h5_path = loader.path_for(SurfaceH5, surf_idx.gid)
-                    with SurfaceH5(surf_h5_path) as surf_h5:
-                        surf_h5.store(surf)
-                        surf_h5.gid.store(uuid.UUID(surf_idx.gid))
-                    results.append(surf_idx)
+                surf_h5_path = loader.path_for(SurfaceH5, surf_idx.gid)
+                with SurfaceH5(surf_h5_path) as surf_h5:
+                    surf_h5.store(surf)
+                    surf_h5.gid.store(uuid.UUID(surf_idx.gid))
+                results.append(surf_idx)
 
 
-            self._cleanup_after_cfflib(conn_obj)
+        self._cleanup_after_cfflib(conn_obj)
 
-            current_op = dao.get_operation_by_id(self.operation_id)
-            current_op.user_group = conn_obj.get_connectome_meta().title
-            if warning_message:
-                current_op.additional_info = warning_message
-            dao.store_entity(current_op)
+        current_op = dao.get_operation_by_id(self.operation_id)
+        current_op.user_group = conn_obj.get_connectome_meta().title
+        if warning_message:
+            current_op.additional_info = warning_message
+        dao.store_entity(current_op)
 
-            return results
+        return results
 
-        finally:
-            # Make sure to set sys.stdout back to it's default value so this won't
-            # have any influence on the rest of TVB.
-            print_output = custom_stdout.getvalue()
-            sys.stdout = default_stdout
-            custom_stdout.close()
-            # Now log everything that cfflib2 outputes with `print` statements using TVB logging
-            self.logger.debug("Output from cfflib library: %s" % print_output)
 
 
     def _parse_connectome_network(self, connectome_network, warning_message, **kwargs):

@@ -167,7 +167,7 @@ class ABCAdapterForm(Form):
 
 
 
-class ABCAdapter(object):
+class ABCAdapter(object, metaclass=ABCMeta):
     """
     Root Abstract class for all TVB Adapters. 
     """
@@ -198,13 +198,8 @@ class ABCAdapter(object):
     KEYWORD_SEPARATOR = input_tree.KEYWORD_SEPARATOR
     KEYWORD_OPTION = input_tree.KEYWORD_OPTION
 
-    INTERFACE_ATTRIBUTES_ONLY = interface.INTERFACE_ATTRIBUTES_ONLY
-    INTERFACE_ATTRIBUTES = interface.INTERFACE_ATTRIBUTES
-
     # model.Algorithm instance that will be set for each adapter created by in build_adapter method
     stored_adapter = None
-
-    __metaclass__ = ABCMeta
 
 
     def __init__(self):
@@ -573,11 +568,10 @@ class ABCAdapter(object):
 
 
 
-class ABCAsynchronous(ABCAdapter):
+class ABCAsynchronous(ABCAdapter, metaclass=ABCMeta):
     """
     Abstract class, for marking adapters that are prone to be executed  on Cluster.
     """
-    __metaclass__ = ABCMeta
 
     def array_size2kb(self, size):
         """
@@ -588,10 +582,9 @@ class ABCAsynchronous(ABCAdapter):
 
 
 
-class ABCSynchronous(ABCAdapter):
+class ABCSynchronous(ABCAdapter, metaclass=ABCMeta):
     """
     Abstract class, for marking adapters that are prone to be NOT executed on Cluster.
     """
-    __metaclass__ = ABCMeta
 
 

@@ -42,7 +42,6 @@ from tvb.core.neotraits.db import Base
 from tvb.core.utils import string2date
 from tvb.core.entities.exportable import Exportable
 from tvb.core.entities.model.model_project import Project
-from tvb.basic.traits.types_basic import MapAsJson
 from tvb.core.utils import parse_json_parameters, format_timedelta
 
 
@@ -70,7 +69,7 @@ class BurstConfiguration(Base, Exportable):
     """
     Contains information required to rebuild the interface of a burst that was
     already launched.
-    
+
     - simulator_configuration - hold a dictionary with what entries were displayed in the simulator part
     - dynamic_ids - A list of dynamic id's associated with the connectivity nodes. Used by the region parameters page
 
@@ -148,6 +147,7 @@ class BurstConfiguration(Base, Exportable):
         """
         From dictionary, compose JSON string for DB storage of burst configuration parameters.
         """
+        from tvb.basic.traits.types_basic import MapAsJson
         self._simulator_configuration = json.dumps(self.simulator_configuration, cls=MapAsJson.MapAsJsonEncoder)
         self._dynamic_ids = json.dumps(self.dynamic_ids)
         self.start_time = datetime.now()

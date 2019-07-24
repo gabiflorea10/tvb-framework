@@ -2,7 +2,7 @@ import logging
 import numpy
 from tvb.core.neotraits.h5 import H5File, DataSet, Scalar, Json
 from tvb.datatypes.surfaces import Surface, KEY_VERTICES, KEY_START, KEY_END, SPLIT_BUFFER_SIZE, KEY_TRIANGLES, \
-    KEY_HEMISPHERE, HEMISPHERE_LEFT, SPLIT_PICK_MAX_TRIANGLE, paths2url
+    KEY_HEMISPHERE, HEMISPHERE_LEFT, SPLIT_PICK_MAX_TRIANGLE
 
 log = logging.getLogger(__name__)
 
@@ -122,7 +122,7 @@ class SurfaceH5(H5File):
         if not self._bi_hemispheric or self._split_slices is None:
             return None
         result = [1] * self._number_of_split_slices
-        for key, value in self._split_slices.iteritems():
+        for key, value in self._split_slices.items():
             if value[KEY_HEMISPHERE] == HEMISPHERE_LEFT:
                 result[int(key)] = 0
         return result

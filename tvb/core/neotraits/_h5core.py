@@ -12,8 +12,7 @@ from tvb.basic.neotraits.api import HasTraits, Attr, NArray
 
 
 
-class Accessor(object):
-    __metaclass__ = abc.ABCMeta
+class Accessor(object, metaclass=abc.ABCMeta):
 
     def __init__(self, trait_attribute, h5file, name=None):
         # type: (Attr, H5File, str) -> None
@@ -246,7 +245,7 @@ class H5File(object):
 
     def iter_accessors(self):
         # type: () -> typing.Generator[Accessor]
-        for accessor in self.__dict__.itervalues():
+        for accessor in self.__dict__.items():
             if isinstance(accessor, Accessor):
                 yield accessor
 

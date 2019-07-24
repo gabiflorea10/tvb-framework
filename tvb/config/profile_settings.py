@@ -95,7 +95,7 @@ class TestSQLiteProfile(WebSettingsProfile):
     DEFAULT_STORAGE = os.path.expanduser(os.path.join('~', 'TVB_TEST'))
 
     SVN_VERSION = 1
-    CODE_CHECKED_TO_VERSION = sys.maxint
+    CODE_CHECKED_TO_VERSION = sys.maxsize
     TRADE_CRASH_SAFETY_FOR_SPEED = True
 
 
@@ -105,7 +105,7 @@ class TestSQLiteProfile(WebSettingsProfile):
         self.web.RENDER_HTML = False
         self.MAX_THREADS_NUMBER = self.manager.get_attribute(stored.KEY_MAX_THREAD_NR, 2, int)
 
-        self.TVB_STORAGE = self.manager.get_attribute(stored.KEY_STORAGE, self.DEFAULT_STORAGE, unicode)
+        self.TVB_STORAGE = self.manager.get_attribute(stored.KEY_STORAGE, self.DEFAULT_STORAGE, str)
         # For tests we will place logs in workspace (current folder), to have them visible from Hudson.
         self.TVB_LOG_FOLDER = "TEST_OUTPUT"
         self.TVB_TEMP_FOLDER = os.path.join(self.TVB_STORAGE, "TEMP")
