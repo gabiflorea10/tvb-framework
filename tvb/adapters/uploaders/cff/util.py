@@ -124,11 +124,8 @@ def save_data(obj):
             os.makedirs()
 
         if 'CVolume' in objrep:
-            print("Saving CVolume ...")
             ni.save(obj.data, tmpfname)
-            print("Done.")
         elif 'CNetwork' in objrep:
-            print("Saving CNetwork")
             if obj.fileformat == "GraphML":
                 # write graph to temporary file
                 nx.write_graphml(obj.data, tmpfname)
@@ -138,7 +135,6 @@ def save_data(obj):
                 nx.write_gpickle(obj.data, tmpfname)
             else:
                 raise NotSupportedFormat("Other", str(obj))
-            print("Done.")
 
         elif 'CSurface' in objrep:
             if obj.fileformat == "Gifti":
@@ -205,7 +201,6 @@ def save_data(obj):
         # valid for iszip = True and iszip = False
         # either path to the .cff or to the meta.cml
         # return op.join(op.dirname(obj.parent_cfile.fname), obj.src)
-        print("Connectome Object is not loaded. Nothing to save.")
         return ''
 
     
@@ -302,11 +297,9 @@ def load_data(obj):
         _zipfile = ZipFile(obj.parent_cfile.src, 'r', ZIP_DEFLATED)
         try:
             exfile = _zipfile.extract(obj.src, tmpdir)
-            print("Loading file. Created temporary file: %s" % exfile)
             obj.tmpsrc = exfile
             _zipfile.close()
             retload = load(exfile)
-            print("Succeed.")
             return retload
         except: # XXX: what is the correct exception for read error?
             raise RuntimeError('Can not extract "%s" from connectome file using path %s. Please extract .cff and load meta.cml directly.' % (str(obj.name), str(obj.src)) )
@@ -317,18 +310,14 @@ def load_data(obj):
     else:
         if hasattr(obj, 'tmpsrc'):
             # we have an absolute path
-            print("Load object: %s" % obj.tmpsrc)
             obj.tmpsrc = obj.tmpsrc
             retload = load(obj.tmpsrc)
-            print("Succeed.")
             return retload
         else:
             # otherwise, we need to join the meta.cml path with the current relative path
             path2file = op.join(op.dirname(obj.parent_cfile.fname), obj.src)
-            print("Load object: %s" % path2file)
             obj.tmpsrc = path2file
             retload = load(path2file)
-            print("Succeed.")
             return retload
 
 def unify(t, n):

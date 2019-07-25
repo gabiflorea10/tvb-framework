@@ -69,7 +69,6 @@ import sys
 from . import cff as supermod
 
 etree_ = None
-Verbose_import_ = False
 (   XMLParser_import_none, XMLParser_import_lxml,
     XMLParser_import_elementtree
     ) = list(range(3))
@@ -78,36 +77,26 @@ try:
     # lxml
     from lxml import etree as etree_
     XMLParser_import_library = XMLParser_import_lxml
-    if Verbose_import_:
-        print("running with lxml.etree")
 except ImportError:
     try:
         # cElementTree from Python 2.5+
         import xml.etree.cElementTree as etree_
         XMLParser_import_library = XMLParser_import_elementtree
-        if Verbose_import_:
-            print("running with cElementTree on Python 2.5+")
     except ImportError:
         try:
             # ElementTree from Python 2.5+
             import xml.etree.ElementTree as etree_
             XMLParser_import_library = XMLParser_import_elementtree
-            if Verbose_import_:
-                print("running with ElementTree on Python 2.5+")
         except ImportError:
             try:
                 # normal cElementTree install
                 import cElementTree as etree_
                 XMLParser_import_library = XMLParser_import_elementtree
-                if Verbose_import_:
-                    print("running with cElementTree")
             except ImportError:
                 try:
                     # normal ElementTree install
                     import elementtree.ElementTree as etree_
                     XMLParser_import_library = XMLParser_import_elementtree
-                    if Verbose_import_:
-                        print("running with ElementTree")
                 except ImportError:
                     raise ImportError("Failed to import ElementTree from any known place")
 
@@ -413,10 +402,7 @@ class connectome(supermod.connectome):
                 if save:
                     ele.save()
                 # remove .data and .tmpsrc
-                print("Will not remove file %s from file system" % ele.tmpsrc)
-                print("Remove .data attribute")
                 del ele.data
-                print("Remove .tmpsrc attribute")
                 del ele.tmpsrc
     
     # CMetadata setter
@@ -694,107 +680,7 @@ class connectome(supermod.connectome):
 
         # need to update the reference to the parent connectome file
         self._update_parent_reference()
-        
-    # Print out a summary of the connectome
-    def print_summary(self):
-        """Print a summary of the connectome"""
-        
-        # Intro
-        s = '#'*60
-        s+= '\n# connectome object'
-        
-        # Statistics
-        s+= '\n#\n# Statistics\n# '+'='*56+' #'
-        s+= '\n# '+str(len(self.get_connectome_network()))+' CNetwork'
-        s+= '\n# '+str(len(self.get_connectome_volume()))+' CVolume'
-        s+= '\n# '+str(len(self.get_connectome_track()))+' CTrack'
-        s+= '\n# '+str(len(self.get_connectome_surface()))+' CSurface'
-        s+= '\n# '+str(len(self.get_connectome_timeseries()))+' CTimeserie'
-        s+= '\n# '+str(len(self.get_connectome_script()))+' CScript'
-        s+= '\n# '+str(len(self.get_connectome_data()))+' CData'
-        s+= '\n# '+str(len(self.get_connectome_imagestack()))+' CImagestack'
-        
-        # CMetadata
-        s+= '\n#\n# CMetadata\n# '+'='*56+' #'
-        cm = self.get_connectome_meta()
-        s+= '\n# title : '+cm.get_title()  
-        if not cm.get_species() is None and isinstance(cm.get_species(), str):
-            s+= '\n# species : '+cm.get_species() 
-        if not cm.get_description() is None and isinstance(cm.get_description(), str):
-            s+= '\n# description : '+cm.get_description() 
-        if not cm.get_creator() is None and isinstance(cm.get_creator(), str):
-            s+= '\n# creator : '+cm.get_creator() 
-        if not cm.get_email() is None and isinstance(cm.get_email(), str):
-            s+= '\n# email : '+cm.get_email() 
-        if not cm.get_created() is None and isinstance(cm.get_created(), str):
-            s+= '\n# creation date : '+cm.get_created() 
-        if not cm.get_modified() is None and isinstance(cm.get_modified(), str):
-            s+= '\n# modification date : '+cm.get_modified() 
-        if not cm.get_generator() is None and isinstance(cm.get_generator(), str):
-            s+= '\n# generator : '+cm.get_generator() 
-        if not cm.get_version() is None and isinstance(cm.get_version(), str):
-            s+= '\n# cff version : '+cm.get_version()
-        if not cm.get_license() is None and isinstance(cm.get_license(), str):
-            s+= '\n# license : '+cm.get_license() 
-        if not cm.get_rights() is None and isinstance(cm.get_rights(), str):
-            s+= '\n# rights : '+cm.get_rights()
-        if not cm.get_publisher() is None and isinstance(cm.get_publisher(), str):
-            s+= '\n# publisher : '+cm.get_publisher() 
-        if not cm.get_references() is None and isinstance(cm.get_references(), str):
-            s+= '\n# references : '+cm.get_references() 
-        if not cm.get_relation() is None and isinstance(cm.get_relation(), str):
-            s+= '\n# relation : '+cm.get_relation() 
-        # CNetwork
-        if len(self.get_connectome_network()) > 0:
-            s+= '\n#\n# CNetwork\n# '+'='*56+' #'
-            for i in self.get_connectome_network():
-                s+= i.print_summary(False)
-                
-        # CVolume
-        if len(self.get_connectome_volume()) > 0:
-            s+= '\n#\n# CVolume\n# '+'='*56+' #'
-            for i in self.get_connectome_volume():
-                s+= i.print_summary(False)
-            
-        # CTrack
-        if len(self.get_connectome_track()) > 0:
-            s+= '\n#\n# CTrack\n# '+'='*56+' #'
-            for i in self.get_connectome_track():
-                s+= i.print_summary(False)
-            
-        # CSurface
-        if len(self.get_connectome_surface()) > 0:
-            s+= '\n#\n# CSurface\n# '+'='*56+' #'
-            for i in self.get_connectome_surface():
-                s+= i.print_summary(False)
-            
-        # CTimeserie
-        if len(self.get_connectome_timeseries()) > 0:
-            s+= '\n#\n# CTimeseries\n# '+'='*56+' #'
-            for i in self.get_connectome_timeseries():
-                s+= i.print_summary(False)
-            
-        # CScript
-        if len(self.get_connectome_script()) > 0:
-            s+= '\n#\n# CScript\n# '+'='*56+' #'
-            for i in self.get_connectome_script():
-                s+= i.print_summary(False)
-            
-        # CData
-        if len(self.get_connectome_data()) > 0:
-            s+= '\n#\n# CData\n# '+'='*56+' #'
-            for i in self.get_connectome_data():
-                s+= i.print_summary(False)
-            
-        # CImagestack
-        if len(self.get_connectome_imagestack()) > 0:
-            s+= '\n#\n# CImagestack\n# '+'='*56+' #'
-            for i in self.get_connectome_imagestack():
-                s+= i.print_summary(False)
-            
-        s+= '\n'+'#'*60
-        print(s)
-        
+
         
 supermod.connectome.subclass = connectome
 # end class connectome
@@ -970,9 +856,6 @@ class CBaseClass(object):
         rval = save_data(self)
         if not rval == '':
             self.tmpsrc = rval
-            print("Updated storage path of file: %s" % rval)
-        else:
-            print('There is nothing to save.')
 
     # Metadata
     def load(self, custom_loader = None):
@@ -1032,11 +915,8 @@ class CBaseClass(object):
                 s+= '\n#\t '+i+' : '+m[i]
         s+= '\n# '+'-'*56+' #'
         
-        # Print or return
-        if printer:
-            print(s)
-        else:
-            return s
+        # Return
+        return s
     
     def __eq__(self, y):
         return ( self.__class__.__name__ == y.__class__.__name__ and
@@ -1078,7 +958,6 @@ class CNetwork(supermod.CNetwork, CBaseClass):
         """
         super(CNetwork, self).__init__(src, dtype, name, fileformat, metadata, description, )
         if not src is None and os.path.exists(src):
-            print("File given by src exists. Create a new relative path.")
             self.tmpsrc = src
             self.src = self.get_unique_relpath()
 
@@ -1198,7 +1077,6 @@ class CSurface(supermod.CSurface, CBaseClass):
         """
         super(CSurface, self).__init__(src, dtype, name, fileformat, description, metadata, )
         if not src is None and os.path.exists(src):
-            print("File given by src exists. Create a new relative path.")
             self.tmpsrc = src
             self.src = self.get_unique_relpath()
 
@@ -1274,7 +1152,6 @@ class CVolume(supermod.CVolume, CBaseClass):
         """
         super(CVolume, self).__init__(src, dtype, name, fileformat, description, metadata, )
         if not src is None and os.path.exists(src):
-            print("File given by src exists. Create a new relative path.")
             self.tmpsrc = src
             self.src = self.get_unique_relpath()
 
@@ -1356,7 +1233,6 @@ class CTrack(supermod.CTrack, CBaseClass):
     def __init__(self, name=None, src=None, fileformat='TrackVis', dtype = None, description=None, metadata=None):
         super(CTrack, self).__init__(src, dtype, name, fileformat, description, metadata, )        
         if not src is None and os.path.exists(src):
-            print("File given by src exists. Create a new relative path.")
             self.tmpsrc = src
             self.src = self.get_unique_relpath()
 
@@ -1391,7 +1267,6 @@ class CTimeseries(supermod.CTimeseries, CBaseClass):
     def __init__(self, name=None, src=None, dtype=None, fileformat='HDF5', description=None, metadata=None):
         super(CTimeseries, self).__init__(src, dtype, name, fileformat, description, metadata, )
         if not src is None and os.path.exists(src):
-            print("File given by src exists. Create a new relative path.")
             self.tmpsrc = src
             self.src = self.get_unique_relpath()
 
@@ -1417,7 +1292,6 @@ class CData(supermod.CData, CBaseClass):
     def __init__(self, name=None, src=None, dtype=None, fileformat=None, description=None, metadata=None):
         super(CData, self).__init__(src, dtype, name, fileformat, description, metadata, )
         if not src is None and os.path.exists(src):
-            print("File given by src exists. Create a new relative path.")
             self.tmpsrc = src
             self.src = self.get_unique_relpath()
 
@@ -1453,7 +1327,6 @@ class CScript(supermod.CScript, CBaseClass):
     def __init__(self, name=None, src=None, dtype='Python', fileformat='UTF-8', description=None, metadata=None):
         super(CScript, self).__init__(src, dtype, name, fileformat, description, metadata, )
         if not src is None and os.path.exists(src):
-            print("File given by src exists. Create a new relative path.")
             self.tmpsrc = src
             self.src = self.get_unique_relpath()
 
@@ -1576,7 +1449,6 @@ Usage: python ???.py <infilename>
 """
 
 def usage():
-    print(USAGE_TEXT)
     sys.exit(1)
 
 
