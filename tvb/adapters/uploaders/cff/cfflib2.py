@@ -133,7 +133,7 @@ ExternalEncoding = 'ascii'
 class metadata(supermod.metadata):
     def __init__(self, tag=None, section=None):
         super(metadata, self).__init__(tag, section, )
-        
+
     def get_tags_as_dictionary(self):
         """Return the metadata tags as a dictionary"""
         dat = self.get_tag()
@@ -141,7 +141,7 @@ class metadata(supermod.metadata):
         for ele in dat:
             ret[ele.key] = ele.valueOf_
         return ret
-    
+
     def set_tags_with_dictionary(self, dictionary):
         """Set the metadata with a dictionary"""
         tags = self.get_tag()
@@ -159,8 +159,8 @@ class metadata(supermod.metadata):
                 # append to tags
                 mytag = tag(str(k), str(dictionary[k]))
                 self.add_tag(mytag)
-                
-                
+
+
 supermod.metadata.subclass = metadata
 
 class connectome(supermod.connectome):
@@ -435,11 +435,11 @@ class connectome(supermod.connectome):
             raise Exception('A title is required.')
         
         self.connectome_meta = cmeta
-    
+
     # CNetwork
     def add_connectome_network_from_nxgraph(self, name, nxGraph, dtype='AttributeNetwork', fileformat='NXGPickle'):
         """Add a new CNetwork from the given NetworkX graph object to the connectome.
-        
+
         Parameters
         ----------
         name : string,
@@ -450,248 +450,248 @@ class connectome(supermod.connectome):
             the data type of this CNetwork
         fileformat : NXGPickle,
             the fileformat of the file of this CNetwork
-                    
+
         Examples
         --------
         >>> myConnectome.add_connectome_network_from_nx(myNXGraph,'nxG1')
-            
+
         See also
         --------
-        NetworkX, CNetwork.set_with_nxgraph, CNetwork, connectome.add_connectome_network, connectome   
-            
+        NetworkX, CNetwork.set_with_nxgraph, CNetwork, connectome.add_connectome_network, connectome
+
         """
-        
+
         # Check if the name is unique
         if not self.is_name_unique(name):
             raise Exception('The name is not unique.')
-            
+
         n = CNetwork(name)
         n.set_with_nxgraph(nxGraph, dtype, fileformat)
         self.add_connectome_network(n)
         # need to update the reference to the parent connectome file
         self._update_parent_reference()
-    
+
     def add_connectome_network_from_graphml(self, name, graphML):
         """Add a new CNetwork from the given GraphML file to the connectome object.
-        
+
         Parameters
         ----------
         name : string,
             the unique name of the new CNetwork
         graphML : GraphML file,
             the filename of the GraphML to add to the connectome.
-                    
+
         Examples
         --------
         >>> myConnectome.add_connectome_network_from_ml('myGraphML.graphml')
-            
+
         See also
         --------
         GraphML, CNetwork.create_from_graphml, CNetwork, connectome.add_connectome_network, connectome
-            
+
         """
-        
+
         # Check if the name is unique
         if not self.is_name_unique(name):
             raise Exception('The name is not unique.')
-        
+
         n = CNetwork.create_from_graphml(name, graphML)
-        self.add_connectome_network(n)      
+        self.add_connectome_network(n)
         # need to update the reference to the parent connectome file
         self._update_parent_reference()
 
     def add_connectome_script_from_file(self, name, filename, dtype = 'Python', fileformat = 'UTF-8'):
         """ Add a CScript from a file """
-        
+
         if not self.is_name_unique(name):
             raise Exception('The name is not unique.')
-        
+
         s = CScript.create_from_file(name, filename, dtype= dtype, fileformat = dtype)
         self.add_connectome_script(s)
         # need to update the reference to the parent connectome file
         self._update_parent_reference()
 
-        
+
     def add_connectome_network(self, cnet):
         """Add the given CNetwork to the connectome object.
-        
+
         Parameters
         ----------
         cnet : CNetwork,
             the connectome network to add to the connectome, the CNetwork name have to be unique.
-            
+
         See also
         --------
         CNetwork, connectome
-            
+
         """
-              
-        # Check if the name is set     
+
+        # Check if the name is set
         if cnet.name is None or cnet.name == '':
             raise Exception('A name is required.')
-        
+
         # Check if the name is unique
         if not self.is_name_unique(cnet.name):
             raise Exception('The name is not unique.')
-            
+
         self.connectome_network.append(cnet)
-        
+
         # update sources for correct storing
         if op.exists(cnet.src):
             cnet.tmpsrc = cnet.src
             cnet.src = cnet.get_unique_relpath()
-        
+
         # need to update the reference to the parent connectome file
         self._update_parent_reference()
 
-        
+
     # CVolume
     def add_connectome_volume(self, cvol):
         """Add the given CVolume to the connectome object.
-        
+
         Parameters
         ----------
         cnet : CVolume,
             the connectome volume to add to the connectome, the CVolume name have to be unique.
-            
+
         See also
         --------
         CVolume, connectome
-            
+
         """
-              
-        # Check if the name is set     
+
+        # Check if the name is set
         if cvol.name is None or cvol.name == '':
             raise Exception('A name is required.')
-        
+
         # Check if the name is unique
         if not self.is_name_unique(cvol.name):
             raise Exception('The name is not unique.')
-            
+
         self.connectome_volume.append(cvol)
-        
+
         # update sources for correct storing
         if op.exists(cvol.src):
             cvol.tmpsrc = cvol.src
             cvol.src = cvol.get_unique_relpath()
-        
+
         # need to update the reference to the parent connectome file
         self._update_parent_reference()
-        
+
     # CSurface
     def add_connectome_surface(self, csurf):
         """Add the given CSurface to the connectome object.
-        
+
         Parameters
         ----------
         csurf : CSurface,
             the connectome surface to add to the connectome, the CSurface name have to be unique.
-            
+
         See also
         --------
         CSurface, connectome
-            
+
         """
-              
-        # Check if the name is set     
+
+        # Check if the name is set
         if csurf.name is None or csurf.name == '':
             raise Exception('A name is required.')
-        
+
         # Check if the name is unique
         if not self.is_name_unique(csurf.name):
             raise Exception('The name is not unique.')
-        
+
         self.connectome_surface.append(csurf)
-        
+
         # update sources for correct storing
         if op.exists(csurf.src):
             csurf.tmpsrc = csurf.src
             csurf.src = csurf.get_unique_relpath()
-        
+
         # need to update the reference to the parent connectome file
         self._update_parent_reference()
-    
+
     def add_connectome_track(self, ctrack):
         """Add the given CTrack to the connectome object.
-        
+
         Parameters
         ----------
         ctrack : CTrack,
             the connectome track to add to the connectome, the CTrack name have to be unique.
-            
+
         """
-              
-        # Check if the name is set     
+
+        # Check if the name is set
         if ctrack.name is None or ctrack.name == '':
             raise Exception('A name is required.')
-        
+
         # Check if the name is unique
         if not self.is_name_unique(ctrack.name):
             raise Exception('The name is not unique.')
-        
+
         self.connectome_track.append(ctrack)
-        
+
         # update sources for correct storing
         if op.exists(ctrack.src):
             ctrack.tmpsrc = ctrack.src
             ctrack.src = ctrack.get_unique_relpath()
-        
+
         # need to update the reference to the parent connectome file
         self._update_parent_reference()
 
     def add_connectome_data(self, cda):
         """Add the given CData to the connectome object.
-        
+
         Parameters
         ----------
         cda : CData,
             the connectome data to add to the connectome, the CData name have to be unique.
-            
+
         """
-              
-        # Check if the name is set     
+
+        # Check if the name is set
         if cda.name is None or cda.name == '':
             raise Exception('A name is required.')
-        
+
         # Check if the name is unique
         if not self.is_name_unique(cda.name):
             raise Exception('The name is not unique.')
-        
+
         self.connectome_data.append(cda)
-        
+
         # update sources for correct storing
         if op.exists(cda.src):
             cda.tmpsrc = cda.src
-            cda.src = cda.get_unique_relpath()      
-        
+            cda.src = cda.get_unique_relpath()
+
         # need to update the reference to the parent connectome file
         self._update_parent_reference()
-        
+
     def add_connectome_script(self, cscri):
         """Add the given CScript to the connectome object.
-        
+
         Parameters
         ----------
         cscri : CScript,
             the connectome script to add to the connectome, the CScript name have to be unique.
-            
+
         """
-              
-        # Check if the name is set     
+
+        # Check if the name is set
         if cscri.name is None or cscri.name == '':
             raise Exception('A name is required.')
-        
+
         # Check if the name is unique
         if not self.is_name_unique(cscri.name):
             raise Exception('The name is not unique.')
-        
+
         self.connectome_script.append(cscri)
-        
+
         # update sources for correct storing
         if op.exists(cscri.src):
             cscri.tmpsrc = cscri.src
-            cscri.src = cscri.get_unique_relpath()      
-        
+            cscri.src = cscri.get_unique_relpath()
+
         # need to update the reference to the parent connectome file
         self._update_parent_reference()
         
@@ -1408,7 +1408,7 @@ class CTimeseries(supermod.CTimeseries, CBaseClass):
     def get_unique_relpath(self):
         """ Return a unique relative path for this element """
         return unify('CTimeserie', self.name + self.get_file_ending())
-    
+
 supermod.CTimeseries.subclass = CTimeseries
 # end class CTimeserie
 
@@ -1444,7 +1444,7 @@ class CData(supermod.CData, CBaseClass):
     def get_unique_relpath(self):
         """ Return a unique relative path for this element """
         return unify('CData', self.name + self.get_file_ending())
-    
+
 supermod.CData.subclass = CData
 # end class CData
 
@@ -1476,7 +1476,7 @@ class CScript(supermod.CScript, CBaseClass):
     @classmethod
     def create_from_file(cls, name, filename, dtype= 'Python', fileformat = 'UTF-8'):
         """ Return a CScript object from a given script/text file
-        
+
         Parameters
         ----------
         name : string,
@@ -1487,13 +1487,13 @@ class CScript(supermod.CScript, CBaseClass):
             the datatype of the new CScript
         fileformat : string, optional
             the file format of the file, usually UTF-8
-        
+
         Returns
         -------
         cscr : CScript
-        
+
         """
-        cscr            = CScript(name=name) 
+        cscr            = CScript(name=name)
         cscr.tmpsrc     = op.abspath(filename)
         cscr.fileformat = fileformat
         cscr.dtype      = dtype
@@ -1501,24 +1501,10 @@ class CScript(supermod.CScript, CBaseClass):
         # cscr.data       = open(filename, 'r')
         cscr.src        = cscr.get_unique_relpath()
         return cscr
-    
+
 supermod.CScript.subclass = CScript
 # end class CScript
 
-
-class CImagestack(supermod.CImagestack, CBaseClass):
-    def __init__(self, name=None, src=None, fileformat=None, pattern=None, description=None, metadata=None):
-        super(CImagestack, self).__init__(src, fileformat, name, pattern, description, metadata, )
-
-    def save(self):
-        """ Save a loaded connectome object to a temporary file, return the path """
-        raise NotImplementedError('Saving CImagestack not implemented yet.')
-        
-    def get_unique_relpath(self):
-        """ Return a unique relative path for this element """
-        return unify('CImagestack', self.name + '/')
-    
-supermod.CImagestack.subclass = CImagestack
 
 def get_root_tag(node):
     tag = supermod.Tag_pattern_.match(node.tag).groups()[-1]
@@ -1562,7 +1548,7 @@ def parseString(inString):
 #    rootObj.export(sys.stdout, 0, name_=rootTag,
 #        namespacedef_='xmlns="http://www.connectomics.org/cff-2" xmlns:dcterms="http://purl.org/dc/terms/"')
     # update parent references
-    
+
     return rootObj
 
 
