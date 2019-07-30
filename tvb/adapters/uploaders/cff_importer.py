@@ -47,12 +47,9 @@ from tvb.basic.logger.builder import get_logger
 from tvb.adapters.uploaders.networkx_importer import NetworkxCFFCommonImporterForm
 from tvb.core.adapters.exceptions import LaunchException, ParseException
 from tvb.core.entities.file.datatypes.connectivity_h5 import ConnectivityH5
-from tvb.core.entities.file.datatypes.surface_h5 import SurfaceH5
 from tvb.core.entities.model.datatypes.connectivity import ConnectivityIndex
-from tvb.core.entities.model.datatypes.surface import SurfaceIndex
 from tvb.core.entities.storage import dao, transactional
 from tvb.datatypes.connectivity import Connectivity
-import tvb.datatypes.surfaces as surfaces
 from tvb.core.neotraits._forms import UploadField, SimpleBoolField
 from tvb.interfaces.neocom._h5loader import DirLoader
 
@@ -63,8 +60,6 @@ class CFFImporterForm(NetworkxCFFCommonImporterForm):
         super(CFFImporterForm, self).__init__(prefix, project_id, label_prefix='CNetwork: ')
         self.cff = UploadField('.cff', self, name='cff', required=True, label='CFF archive',
                                doc='Connectome File Format archive expected')
-        self.should_center = SimpleBoolField(self, name='should_center', label='CSurface: Center surfaces',
-                                             doc='Center surfaces using vertices positions mean along axes')
 
 
 class CFF_Importer(ABCUploader):
@@ -92,7 +87,7 @@ class CFF_Importer(ABCUploader):
         self.form = form
 
     def get_output(self):
-        return [Connectivity, surfaces.Surface]
+        return [Connectivity]
 
 
     @transactional
@@ -106,7 +101,6 @@ class CFF_Importer(ABCUploader):
 
         conn_obj = load(cff)
         network = conn_obj.get_connectome_network()
-        surfaces = conn_obj.get_connectome_surface()
         warning_message = ""
         results = []
         loader = DirLoader(self.storage_path)
@@ -122,19 +116,6 @@ class CFF_Importer(ABCUploader):
                     conn_h5.store(conn)
                     conn_h5.gid.store(uuid.UUID(conn_idx.gid))
                 results.append(conn_idx)
-
-        if surfaces:
-            partial = self._parse_connectome_surfaces(surfaces, warning_message, should_center)
-
-            for surf in partial:
-                surf_idx = SurfaceIndex()
-                surf_idx.fill_from_has_traits(surf)
-
-                surf_h5_path = loader.path_for(SurfaceH5, surf_idx.gid)
-                with SurfaceH5(surf_h5_path) as surf_h5:
-                    surf_h5.store(surf)
-                    surf_h5.gid.store(uuid.UUID(surf_idx.gid))
-                results.append(surf_idx)
 
 
         self._cleanup_after_cfflib(conn_obj)
@@ -170,76 +151,6 @@ class CFF_Importer(ABCUploader):
         return connectivities
 
 
-    def _parse_connectome_surfaces(self, connectome_surface, warning_message, should_center):
-        """
-        Parse data from a CSurface object and save it in our internal Surface DataTypes
-        """
-        surfaces, processed_files = [], []
-        parser = GIFTIParser(self.storage_path, self.operation_id)
-
-        for c_surface in connectome_surface:
-            if c_surface.src in processed_files:
-                continue
-
-            try:
-                # create a meaningful but unique temporary path to extract
-                tmpdir = os.path.join(gettempdir(), c_surface.parent_cfile.get_unique_cff_name())
-                self.log.debug("Extracting %s[%s] into %s ..." % (c_surface.src, c_surface.name, tmpdir))
-                _zipfile = ZipFile(c_surface.parent_cfile.src, 'r', ZIP_DEFLATED)
-                gifti_file_1 = _zipfile.extract(c_surface.src, tmpdir)
-
-                gifti_file_2 = None
-                surface_name, pair_surface = self._find_pair_file(c_surface, connectome_surface)
-                if pair_surface:
-                    self.log.debug("Extracting pair %s[%s] into %s ..." % (pair_surface.src, pair_surface.name, tmpdir))
-                    gifti_file_2 = _zipfile.extract(pair_surface.src, tmpdir)
-
-                surface_type = self._guess_surface_type(c_surface.src.lower())
-                self.logger.info("We will import surface %s as type %s" % (c_surface.src, surface_type))
-                surface = parser.parse(gifti_file_1, gifti_file_2, surface_type, should_center)
-                surface.user_tag_1 = surface_name
-
-                validation_result = surface.validate()
-                if validation_result.warnings:
-                    warning_message += validation_result.summary() + "\n"
-
-                surfaces.append(surface)
-
-                if pair_surface:
-                    processed_files.append(pair_surface.src)
-                processed_files.append(c_surface.src)
-
-                if os.path.exists(tmpdir):
-                    shutil.rmtree(tmpdir)
-
-            except ParseException:
-                self.logger.exception("Could not import a Surface entity.")
-                warning_message += "Problem when importing Surfaces!! \n"
-            except OSError:
-                self.log.exception("Could not clean up temporary file(s).")
-
-        return surfaces
-
-
-    def _find_pair_file(self, current_surface, all_surfaces):
-        """
-        :param current_surface: CSurface instance
-        :param all_surfaces: Iterable over CSurface objects
-        :return: (string: surface_name based on the 1-2 pair files, CSurface: pair_surface or None)
-        """
-        surface_name = current_surface.name
-        pair_surface = None
-        pair_expected_name = self._is_hemisphere_file(current_surface.src)
-
-        for srf in all_surfaces:
-            if srf.src == pair_expected_name:
-                pair_surface = srf
-                surface_name = surface_name.replace('lh', '').replace('rh', '').replace('left', '').replace('right', '')
-                break
-
-        return surface_name, pair_surface
-
-
     def _is_hemisphere_file(self, file_name):
         """
         :param file_name: File Name to analyze
@@ -260,20 +171,6 @@ class CFF_Importer(ABCUploader):
                 return file_name.replace('right', 'left')
 
         return None
-
-
-    def _guess_surface_type(self, file_name):
-        """
-        Based on file_name, try to guess the surface type.
-        e.g. when "pial" is found we guess Cortical Surface
-        """
-        guessed_type = surfaces.FACE
-
-        if 'pial' in file_name or 'cortical' in file_name or 'cortex' in file_name:
-            return surfaces.CORTICAL
-
-        # TODO fill this guessing when we get more details
-        return guessed_type
 
 
     def _cleanup_after_cfflib(self, conn_obj):

@@ -1,6 +1,7 @@
 import importlib
 import uuid
 
+import six
 import typing
 import os.path
 import abc
@@ -11,8 +12,8 @@ from tvb.core.entities.file.hdf5_storage_manager import HDF5StorageManager
 from tvb.basic.neotraits.api import HasTraits, Attr, NArray
 
 
-
-class Accessor(object, metaclass=abc.ABCMeta):
+@six.add_metaclass(abc.ABCMeta)
+class Accessor(object):
 
     def __init__(self, trait_attribute, h5file, name=None):
         # type: (Attr, H5File, str) -> None
@@ -245,7 +246,7 @@ class H5File(object):
 
     def iter_accessors(self):
         # type: () -> typing.Generator[Accessor]
-        for accessor in self.__dict__.items():
+        for accessor in list(self.__dict__.items()):
             if isinstance(accessor, Accessor):
                 yield accessor
 

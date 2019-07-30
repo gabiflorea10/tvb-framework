@@ -153,25 +153,20 @@ class metadata(supermod.metadata):
 supermod.metadata.subclass = metadata
 
 class connectome(supermod.connectome):
-    """The connectome object is the main object of this format.
-    It contains CMetadata, and it can contain some CData, CNetwork,
-    CSurface, CTimeserie, CTrack, CVolume, CScript or CImagestack
-    objects that are referred to as CObjects.
-    
-    It is possible to store to a simple connectome markup .cml file
+    """It is possible to store to a simple connectome markup .cml file
     with appropriate relative references to the data files, or to a 
     compressed (zipped) connectome file with ending .cff containing all
     source data objects. """
     
-    def __init__(self, title = None, connectome_meta=None, connectome_network=None, connectome_surface=None, connectome_volume=None, connectome_track=None, connectome_timeseries=None, connectome_data=None, connectome_script=None, connectome_imagestack=None):
+    def __init__(self, title = None, connectome_meta=None, connectome_network=None, connectome_volume=None, connectome_track=None, connectome_timeseries=None, connectome_data=None, connectome_script=None, connectome_imagestack=None):
         """Create a new connectome object
         
         See also
         --------
-        CMetadata, CNetwork, CSurface, CVolume, CTrack, CTimeserie, CData, CScript and CImagestack
+        CMetadata, CNetwork, CVolume, CTrack, CTimeserie, CData, CScript and CImagestack
     
         """
-        super(connectome, self).__init__(connectome_meta, connectome_network, connectome_surface, connectome_volume, connectome_track, connectome_timeseries, connectome_data, connectome_script, connectome_imagestack, )
+        super(connectome, self).__init__(connectome_meta, connectome_network, connectome_volume, connectome_track, connectome_timeseries, connectome_data, connectome_script, connectome_imagestack, )
 
         # add parent reference to all children
         self._update_parent_reference()
@@ -196,9 +191,7 @@ class connectome(supermod.connectome):
         cname = cobj.__class__.__name__
         
         if cname == 'CNetwork':
-            self.add_connectome_network(cobj)            
-        elif cname == 'CSurface':
-            self.add_connectome_surface(cobj)
+            self.add_connectome_network(cobj)
         elif cname == 'CVolume':
             self.add_connectome_volume(cobj)
         elif cname == 'CTrack':
@@ -221,7 +214,7 @@ class connectome(supermod.connectome):
         >>> first_ele = allcobj[0]
 
         """        
-        return self.connectome_network + self.connectome_surface + \
+        return self.connectome_network + \
                 self.connectome_volume + self.connectome_track + \
                 self.connectome_timeseries + self.connectome_data + \
                 self.connectome_script + self.connectome_imagestack
@@ -374,7 +367,10 @@ class connectome(supermod.connectome):
             ele.parent_cfile = self
 
     def to_xml(self):
-        from io import StringIO
+        if sys.version_info[0] == 3:
+            from io import StringIO
+        else:
+            from StringIO import StringIO
         re = StringIO()
         re.write('<?xml version="1.0" encoding="UTF-8"?>\n')
         ns = """xmlns="http://www.connectomics.org/cff-2"
@@ -560,39 +556,6 @@ class connectome(supermod.connectome):
         if op.exists(cvol.src):
             cvol.tmpsrc = cvol.src
             cvol.src = cvol.get_unique_relpath()
-
-        # need to update the reference to the parent connectome file
-        self._update_parent_reference()
-
-    # CSurface
-    def add_connectome_surface(self, csurf):
-        """Add the given CSurface to the connectome object.
-
-        Parameters
-        ----------
-        csurf : CSurface,
-            the connectome surface to add to the connectome, the CSurface name have to be unique.
-
-        See also
-        --------
-        CSurface, connectome
-
-        """
-
-        # Check if the name is set
-        if csurf.name is None or csurf.name == '':
-            raise Exception('A name is required.')
-
-        # Check if the name is unique
-        if not self.is_name_unique(csurf.name):
-            raise Exception('The name is not unique.')
-
-        self.connectome_surface.append(csurf)
-
-        # update sources for correct storing
-        if op.exists(csurf.src):
-            csurf.tmpsrc = csurf.src
-            csurf.src = csurf.get_unique_relpath()
 
         # need to update the reference to the parent connectome file
         self._update_parent_reference()
@@ -1047,84 +1010,6 @@ supermod.CNetwork.subclass = CNetwork
 # end class CNetwork
 
 
-class CSurface(supermod.CSurface, CBaseClass):
-    """A connectome surface object"""
-    
-    def __init__(self, name='mysurface', dtype='Surfaceset', fileformat='Gifti', src=None, description=None, metadata=None):
-        """
-        Create a new CSurface object.
-        
-        Parameters
-        ----------
-        name : 'mysurface'
-            the unique surface name
-        dtype : 'Labeling', 'Surfaceset', 'Surfaceset+Labeling', 'Other'
-            the type of data that the Gifti file contain
-        fileformat : 'Gifti',
-            the fileformat of the surface, use default 'Gifti' to use the 
-            only supported Gifti format by cfflib, use 'Other' for others format and custom support.
-        src : string, optional,
-            the source file of the surface
-        description : string, optional,
-            a description of the CSurface
-        metadata : Metadata, optional,
-            more metadata relative to the surface
-            
-        See also
-        --------
-        Metadata, connectome
-    
-        """
-        super(CSurface, self).__init__(src, dtype, name, fileformat, description, metadata, )
-        if not src is None and os.path.exists(src):
-            self.tmpsrc = src
-            self.src = self.get_unique_relpath()
-
-    def get_file_ending(self):
-        """ Return the file name ending """
-        if self.fileformat == 'Gifti':
-            fend = '.gii'
-        elif self.fileformat == 'Other':
-            fend = ''
-        return fend
-
-    def get_unique_relpath(self):
-        """ Return a unique relative path for this element """
-        return unify('CSurface', self.name + self.get_file_ending())
-    
-    # Create from a Gifti file
-    @classmethod
-    def create_from_gifti(cls, name, gii_filename, dtype='label'):
-        """ Return a CSurface object from a given gii_filename pointint to
-        a Gifti file in your file system
-        
-        Parameters
-        ----------
-        name : string,
-            unique name of the CSurface
-        gii_filename : string,
-            filename of the Gifti to load
-        dtype : 'label',
-            the type of data the Gifti file contains
-        
-        Returns
-        -------
-        csurf : CSurface
-        
-        """
-        csurf            = CSurface(name) 
-        csurf.tmpsrc     = op.abspath(gii_filename)
-        csurf.fileformat = "Gifti"
-        csurf.dtype      = dtype
-        #import nibabel.gifti as nig
-        #csurf.data       = nig.read(gii_filename)
-        csurf.src        = csurf.get_unique_relpath()
-        return csurf
-    
-supermod.CSurface.subclass = CSurface
-# end class CSurface
-
-
 class CVolume(supermod.CVolume, CBaseClass):
     """Connectome volume object"""
     
@@ -1406,7 +1291,10 @@ def parse(inFilename):
 
 
 def parseString(inString):
-    from io import StringIO
+    if sys.version_info[0] == 3:
+        from io import StringIO
+    else:
+        from StringIO import StringIO
     doc = parsexml_(StringIO(str(inString)))
     rootNode = doc.getroot()
     rootTag, rootClass = get_root_tag(rootNode)

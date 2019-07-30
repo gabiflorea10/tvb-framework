@@ -136,13 +136,6 @@ def save_data(obj):
             else:
                 raise NotSupportedFormat("Other", str(obj))
 
-        elif 'CSurface' in objrep:
-            if obj.fileformat == "Gifti":
-                import nibabel.gifti as nig
-                nig.write(obj.data, tmpfname)
-            else:
-                raise NotSupportedFormat("Other", str(obj))
-
         elif 'CTrack' in objrep:
             if obj.fileformat == "TrackVis":
                 ni.trackvis.write(tmpfname, obj.data[0], obj.data[1])
@@ -217,13 +210,6 @@ def load_data(obj):
             load = nx.read_gexf
         elif obj.fileformat == "NXGPickle":
             load = nx.read_gpickle
-        else:
-            raise NotSupportedFormat("Other", str(obj))
-        
-    elif 'CSurface' in objrep:
-        if obj.fileformat == "Gifti":
-            import nibabel.gifti as nig
-            load = nig.read
         else:
             raise NotSupportedFormat("Other", str(obj))
         

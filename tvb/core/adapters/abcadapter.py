@@ -40,12 +40,12 @@ import json
 import psutil
 import numpy
 import importlib
+import six
 from functools import wraps
 from datetime import datetime
 from abc import ABCMeta, abstractmethod
 from tvb.basic.profile import TvbProfile
 from tvb.basic.logger.builder import get_logger
-import tvb.basic.traits.traited_interface as interface
 from tvb.core.adapters import input_tree
 from tvb.core.adapters.input_tree import InputTreeManager
 from tvb.core.entities.load import load_entity_by_gid
@@ -166,8 +166,8 @@ class ABCAdapterForm(Form):
         return jinja_env.get_template("form.jinja2").render(form=self)
 
 
-
-class ABCAdapter(object, metaclass=ABCMeta):
+@six.add_metaclass(ABCMeta)
+class ABCAdapter(object):
     """
     Root Abstract class for all TVB Adapters. 
     """
@@ -567,8 +567,8 @@ class ABCAdapter(object, metaclass=ABCMeta):
         return self.tree_manager.flatten(self.get_input_tree())
 
 
-
-class ABCAsynchronous(ABCAdapter, metaclass=ABCMeta):
+@six.add_metaclass(ABCMeta)
+class ABCAsynchronous(ABCAdapter):
     """
     Abstract class, for marking adapters that are prone to be executed  on Cluster.
     """
@@ -581,8 +581,8 @@ class ABCAsynchronous(ABCAdapter, metaclass=ABCMeta):
         return size * TvbProfile.current.MAGIC_NUMBER / 8 / 2 ** 10
 
 
-
-class ABCSynchronous(ABCAdapter, metaclass=ABCMeta):
+@six.add_metaclass(ABCMeta)
+class ABCSynchronous(ABCAdapter):
     """
     Abstract class, for marking adapters that are prone to be NOT executed on Cluster.
     """

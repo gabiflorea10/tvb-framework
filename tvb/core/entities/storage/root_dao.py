@@ -34,7 +34,7 @@ Base DAO behavior.
 .. moduleauthor:: bogdan.neacsa <bogdan.neacsa@codemart.ro>
 .. moduleauthor:: Lia Domide <lia.domide@codemart.ro>
 """
-
+import six
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm.exc import NoResultFound
 from tvb.basic.logger.builder import get_logger
@@ -43,8 +43,8 @@ from tvb.core.entities.storage.session_maker import SESSION_META_CLASS
 from tvb.config import SIMULATION_DATATYPE_CLASS
 
 
-
-class RootDAO(object, metaclass=SESSION_META_CLASS):
+@six.add_metaclass(SESSION_META_CLASS)
+class RootDAO(object):
     """
     GLOBAL METHODS
     """

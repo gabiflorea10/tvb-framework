@@ -450,16 +450,12 @@ class tag(GeneratedsSuper):
 class connectome(GeneratedsSuper):
     subclass = None
     superclass = None
-    def __init__(self, connectome_meta=None, connectome_network=None, connectome_surface=None, connectome_volume=None, connectome_track=None, connectome_timeseries=None, connectome_data=None, connectome_script=None, connectome_imagestack=None):
+    def __init__(self, connectome_meta=None, connectome_network=None, connectome_volume=None, connectome_track=None, connectome_timeseries=None, connectome_data=None, connectome_script=None, connectome_imagestack=None):
         self.connectome_meta = connectome_meta
         if connectome_network is None:
             self.connectome_network = []
         else:
             self.connectome_network = connectome_network
-        if connectome_surface is None:
-            self.connectome_surface = []
-        else:
-            self.connectome_surface = connectome_surface
         if connectome_volume is None:
             self.connectome_volume = []
         else:
@@ -496,10 +492,6 @@ class connectome(GeneratedsSuper):
     def set_connectome_network(self, connectome_network): self.connectome_network = connectome_network
     def add_connectome_network(self, value): self.connectome_network.append(value)
     def insert_connectome_network(self, index, value): self.connectome_network[index] = value
-    def get_connectome_surface(self): return self.connectome_surface
-    def set_connectome_surface(self, connectome_surface): self.connectome_surface = connectome_surface
-    def add_connectome_surface(self, value): self.connectome_surface.append(value)
-    def insert_connectome_surface(self, index, value): self.connectome_surface[index] = value
     def get_connectome_volume(self): return self.connectome_volume
     def set_connectome_volume(self, connectome_volume): self.connectome_volume = connectome_volume
     def add_connectome_volume(self, value): self.connectome_volume.append(value)
@@ -542,8 +534,6 @@ class connectome(GeneratedsSuper):
             self.connectome_meta.export(outfile, level, namespace_, name_='connectome-meta', )
         for connectome_network_ in self.connectome_network:
             connectome_network_.export(outfile, level, namespace_, name_='connectome-network')
-        for connectome_surface_ in self.connectome_surface:
-            connectome_surface_.export(outfile, level, namespace_, name_='connectome-surface')
         for connectome_volume_ in self.connectome_volume:
             connectome_volume_.export(outfile, level, namespace_, name_='connectome-volume')
         for connectome_track_ in self.connectome_track:
@@ -560,7 +550,6 @@ class connectome(GeneratedsSuper):
         if (
             self.connectome_meta is not None or
             self.connectome_network or
-            self.connectome_surface or
             self.connectome_volume or
             self.connectome_track or
             self.connectome_timeseries or
@@ -592,18 +581,6 @@ class connectome(GeneratedsSuper):
             showIndent(outfile, level)
             outfile.write('model_.CNetwork(\n')
             connectome_network_.exportLiteral(outfile, level, name_='CNetwork')
-            showIndent(outfile, level)
-            outfile.write('),\n')
-        level -= 1
-        showIndent(outfile, level)
-        outfile.write('],\n')
-        showIndent(outfile, level)
-        outfile.write('connectome_surface=[\n')
-        level += 1
-        for connectome_surface_ in self.connectome_surface:
-            showIndent(outfile, level)
-            outfile.write('model_.CSurface(\n')
-            connectome_surface_.exportLiteral(outfile, level, name_='CSurface')
             showIndent(outfile, level)
             outfile.write('),\n')
         level -= 1
@@ -697,10 +674,6 @@ class connectome(GeneratedsSuper):
             obj_ = CNetwork.factory()
             obj_.build(child_)
             self.connectome_network.append(obj_)
-        elif nodeName_ == 'connectome-surface':
-            obj_ = CSurface.factory()
-            obj_.build(child_)
-            self.connectome_surface.append(obj_)
         elif nodeName_ == 'connectome-volume':
             obj_ = CVolume.factory()
             obj_.build(child_)
@@ -1140,168 +1113,6 @@ class CNetwork(GeneratedsSuper):
             description_ = self.gds_validate_string(description_, node, 'description')
             self.description = description_
 # end class CNetwork
-
-
-class CSurface(GeneratedsSuper):
-    """Descriptive name of the surface. The path to the file according to
-    location attribute Set to "gifti" to use the only supported
-    Gifti format by cfflib. See
-    http://www.nitrc.org/frs/download.php/158/gifti.xsd for schema
-    information Use "Other" for other formats with custom IO
-    Handling What type of surface does the Gifti file contain: -
-    type="Labeling" The Gifti file contains surface labels. This
-    file can be referenced in connectome-network with either the
-    name attribute or in addition to another surface defined by name
-    and using the labelname attribute and matching labelid. If
-    referenced in such a way, the networks' nodes attribute
-    dn_intensityvalue value may match the label array integers,
-    thereby relating a network node to a surface patch (a region of
-    interest defined on the surface). See also example datasets. -
-    type="Surfaceset" The Gifti file contains a set of surfaces
-    where the metadata tag AnatomicalStructurePrimary match.
-    Individual elements of the set are distinguished by the metadta
-    tag AnatomicalStructureSecondary. The Gifti file contains
-    information about the coordinate system used. -
-    type="Surfaceset+Labeling" If the Gifti file contains data as
-    described for both surfaceset and label above. - type="Other"
-    Any other kind of data storable in a Gifti file."""
-    subclass = None
-    superclass = None
-    def __init__(self, src=None, dtype='Surfaceset', name=None, fileformat=None, description=None, metadata=None):
-        self.src = _cast(None, src)
-        self.dtype = _cast(None, dtype)
-        self.name = _cast(None, name)
-        self.fileformat = _cast(None, fileformat)
-        self.description = description
-        self.metadata = metadata
-    def factory(*args_, **kwargs_):
-        if CSurface.subclass:
-            return CSurface.subclass(*args_, **kwargs_)
-        else:
-            return CSurface(*args_, **kwargs_)
-    factory = staticmethod(factory)
-    def get_description(self): return self.description
-    def set_description(self, description): self.description = description
-    def get_metadata(self): return self.metadata
-    def set_metadata(self, metadata): self.metadata = metadata
-    def get_src(self): return self.src
-    def set_src(self, src): self.src = src
-    def get_dtype(self): return self.dtype
-    def set_dtype(self, dtype): self.dtype = dtype
-    def validate_surfaceEnumDType(self, value):
-        # Validate type surfaceEnumDType, a restriction on xsd:string.
-        pass
-    def get_name(self): return self.name
-    def set_name(self, name): self.name = name
-    def get_fileformat(self): return self.fileformat
-    def set_fileformat(self, fileformat): self.fileformat = fileformat
-    def validate_surfaceFileFormat(self, value):
-        # Validate type surfaceFileFormat, a restriction on xsd:string.
-        pass
-    def export(self, outfile, level, namespace_='cml:', name_='CSurface', namespacedef_=''):
-        showIndent(outfile, level)
-        outfile.write('<%s%s%s' % (namespace_, name_, namespacedef_ and ' ' + namespacedef_ or '', ))
-        self.exportAttributes(outfile, level, [], namespace_, name_='CSurface')
-        if self.hasContent_():
-            outfile.write('>\n')
-            self.exportChildren(outfile, level + 1, namespace_, name_)
-            showIndent(outfile, level)
-            outfile.write('</%s%s>\n' % (namespace_, name_))
-        else:
-            outfile.write('/>\n')
-    def exportAttributes(self, outfile, level, already_processed, namespace_='cml:', name_='CSurface'):
-        if self.src is not None and 'src' not in already_processed:
-            already_processed.append('src')
-            outfile.write(' src=%s' % (self.gds_format_string(quote_attrib(self.src).encode(ExternalEncoding), input_name='src'), ))
-        if self.dtype is not None and 'dtype' not in already_processed:
-            already_processed.append('dtype')
-            outfile.write(' dtype=%s' % (quote_attrib(self.dtype), ))
-        if self.name is not None and 'name' not in already_processed:
-            already_processed.append('name')
-            outfile.write(' name=%s' % (self.gds_format_string(quote_attrib(self.name).encode(ExternalEncoding), input_name='name'), ))
-        if self.fileformat is not None and 'fileformat' not in already_processed:
-            already_processed.append('fileformat')
-            outfile.write(' fileformat=%s' % (quote_attrib(self.fileformat), ))
-    def exportChildren(self, outfile, level, namespace_='cml:', name_='CSurface'):
-        if self.description is not None:
-            showIndent(outfile, level)
-            outfile.write('<%sdescription>%s</%sdescription>\n' % (namespace_, self.gds_format_string(quote_xml(self.description).encode(ExternalEncoding), input_name='description'), namespace_))
-        if self.metadata:
-            self.metadata.export(outfile, level, namespace_, name_='metadata', )
-    def hasContent_(self):
-        if (
-            self.description is not None or
-            self.metadata is not None
-            ):
-            return True
-        else:
-            return False
-    def exportLiteral(self, outfile, level, name_='CSurface'):
-        level += 1
-        self.exportLiteralAttributes(outfile, level, [], name_)
-        if self.hasContent_():
-            self.exportLiteralChildren(outfile, level, name_)
-    def exportLiteralAttributes(self, outfile, level, already_processed, name_):
-        if self.src is not None and 'src' not in already_processed:
-            already_processed.append('src')
-            showIndent(outfile, level)
-            outfile.write('src = "%s",\n' % (self.src,))
-        if self.dtype is not None and 'dtype' not in already_processed:
-            already_processed.append('dtype')
-            showIndent(outfile, level)
-            outfile.write('dtype = "%s",\n' % (self.dtype,))
-        if self.name is not None and 'name' not in already_processed:
-            already_processed.append('name')
-            showIndent(outfile, level)
-            outfile.write('name = "%s",\n' % (self.name,))
-        if self.fileformat is not None and 'fileformat' not in already_processed:
-            already_processed.append('fileformat')
-            showIndent(outfile, level)
-            outfile.write('fileformat = "%s",\n' % (self.fileformat,))
-    def exportLiteralChildren(self, outfile, level, name_):
-        if self.description is not None:
-            showIndent(outfile, level)
-            outfile.write('description=%s,\n' % quote_python(self.description).encode(ExternalEncoding))
-        if self.metadata is not None:
-            showIndent(outfile, level)
-            outfile.write('metadata=model_.metadata(\n')
-            self.metadata.exportLiteral(outfile, level)
-            showIndent(outfile, level)
-            outfile.write('),\n')
-    def build(self, node):
-        self.buildAttributes(node, node.attrib, [])
-        for child in node:
-            nodeName_ = Tag_pattern_.match(child.tag).groups()[-1]
-            self.buildChildren(child, node, nodeName_)
-    def buildAttributes(self, node, attrs, already_processed):
-        value = attrs.get('src')
-        if value is not None and 'src' not in already_processed:
-            already_processed.append('src')
-            self.src = value
-        value = attrs.get('dtype')
-        if value is not None and 'dtype' not in already_processed:
-            already_processed.append('dtype')
-            self.dtype = value
-            self.validate_surfaceEnumDType(self.dtype)    # validate type surfaceEnumDType
-        value = attrs.get('name')
-        if value is not None and 'name' not in already_processed:
-            already_processed.append('name')
-            self.name = value
-        value = attrs.get('fileformat')
-        if value is not None and 'fileformat' not in already_processed:
-            already_processed.append('fileformat')
-            self.fileformat = value
-            self.validate_surfaceFileFormat(self.fileformat)    # validate type surfaceFileFormat
-    def buildChildren(self, child_, node, nodeName_, from_subclass=False):
-        if nodeName_ == 'description':
-            description_ = child_.text
-            description_ = self.gds_validate_string(description_, node, 'description')
-            self.description = description_
-        elif nodeName_ == 'metadata': 
-            obj_ = metadata.factory()
-            obj_.build(child_)
-            self.set_metadata(obj_)
-# end class CSurface
 
 
 class CVolume(GeneratedsSuper):
@@ -2120,7 +1931,6 @@ __all__ = [
     "CMetadata",
     "CNetwork",
     "CScript",
-    "CSurface",
     "CTimeseries",
     "CTrack",
     "CVolume",
