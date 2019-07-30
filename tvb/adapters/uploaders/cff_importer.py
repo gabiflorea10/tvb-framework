@@ -91,7 +91,7 @@ class CFF_Importer(ABCUploader):
 
 
     @transactional
-    def launch(self, cff, should_center=False, **kwargs):
+    def launch(self, cff, **kwargs):
         """
         Process the uploaded CFF and convert read data into our internal DataTypes.
         :param cff: CFF uploaded file to process.
