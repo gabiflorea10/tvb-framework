@@ -29,19 +29,23 @@
 #
 
 """
+.. moduleauthor:: Gabriel Florea <gabriel.florea@codemart.ro>
 .. moduleauthor:: Mihai Andrei <mihai.andrei@codemart.ro>
 """
 
 import pytest
 import tvb_data
 from os import path
+
+from cherrypy._cpreqbody import Part
+from cherrypy.lib.httputil import HeaderMap
+from tvb.core.entities.model.datatypes.connectivity import ConnectivityIndex
 from tvb.tests.framework.core.base_testcase import TransactionalTestCase, BaseTestCase
-from tvb.adapters.uploaders.csv_connectivity_importer import CSVConnectivityParser
+from tvb.adapters.uploaders.csv_connectivity_importer import CSVConnectivityParser, CSVConnectivityImporterForm
 from tvb.basic.filters.chain import FilterChain
 from tvb.core.entities.file.files_helper import FilesHelper
 from tvb.core.services.exceptions import OperationException
 from tvb.core.services.flow_service import FlowService
-from tvb.datatypes.connectivity import Connectivity
 from tvb.tests.framework.adapters.uploaders.connectivity_zip_importer_test import TestConnectivityZip
 from tvb.tests.framework.core.factory import TestFactory
 
@@ -50,7 +54,7 @@ TEST_SUBJECT_B = "TEST_SUBJECT_B"
 
 
 class TestCSVConnectivityParser(BaseTestCase):
-    BASE_PTH = path.join(path.dirname(tvb_data.__file__), 'dti_pipeline', 'Output_Toronto')
+    BASE_PTH = path.join(path.dirname(tvb_data.__file__), 'dti_pipeline_toronto')
 
     def test_parse_happy(self):
         cap_pth = path.join(self.BASE_PTH, 'output_ConnectionDistanceMatrix.csv')
@@ -82,7 +86,7 @@ class TestCSVConnectivityImporter(TransactionalTestCase):
         ### First prepare input data:
         data_dir = path.abspath(path.dirname(tvb_data.__file__))
 
-        toronto_dir = path.join(data_dir, 'dti_pipeline', 'Output_Toronto')
+        toronto_dir = path.join(data_dir, 'dti_pipeline_toronto')
         weights = path.join(toronto_dir, 'output_ConnectionCapacityMatrix.csv')
         tracts = path.join(toronto_dir, 'output_ConnectionDistanceMatrix.csv')
         weights_tmp = weights + '.tmp'
@@ -93,9 +97,21 @@ class TestCSVConnectivityImporter(TransactionalTestCase):
         ### Find importer and Launch Operation
         importer = TestFactory.create_adapter('tvb.adapters.uploaders.csv_connectivity_importer',
                                               'CSVConnectivityImporter')
-        FlowService().fire_operation(importer, self.test_user, self.test_project.id,
-                                     weights=weights_tmp, tracts=tracts_tmp, Data_Subject=subject,
-                                     input_data=reference_connectivity_gid)
+
+        form = CSVConnectivityImporterForm()
+        form.fill_from_post({'_weights': Part(weights_tmp, HeaderMap({}), ''),
+                             '_tracts': Part(tracts_tmp, HeaderMap({}), ''),
+                             '_weights_delimiter': 'comma',
+                             '_tracts_delimiter': 'comma',
+                             '_Data_Subject': subject,
+                             '_input_data': reference_connectivity_gid
+                            })
+
+        form.weights.data = weights_tmp
+        form.tracts.data = tracts_tmp
+        importer.set_form(form)
+
+        FlowService().fire_operation(importer, self.test_user, self.test_project.id, **form.get_form_values())
 
     def test_happy_flow_import(self):
         """
@@ -107,17 +123,17 @@ class TestCSVConnectivityImporter(TransactionalTestCase):
 
         field = FilterChain.datatype + '.subject'
         filters = FilterChain('', [field], [TEST_SUBJECT_A], ['=='])
-        reference_connectivity = TestFactory.get_entity(self.test_project, Connectivity(), filters)
+        reference_connectivity = TestFactory.get_entity(self.test_project, ConnectivityIndex(), filters)
 
-        dt_count_before = TestFactory.get_entity_count(self.test_project, Connectivity())
+        dt_count_before = TestFactory.get_entity_count(self.test_project, ConnectivityIndex())
 
         self._import_csv_test_connectivity(reference_connectivity.gid, TEST_SUBJECT_B)
 
-        dt_count_after = TestFactory.get_entity_count(self.test_project, Connectivity())
+        dt_count_after = TestFactory.get_entity_count(self.test_project, ConnectivityIndex())
         assert dt_count_before + 1 == dt_count_after
 
         filters = FilterChain('', [field], [TEST_SUBJECT_B], ['like'])
-        imported_connectivity = TestFactory.get_entity(self.test_project, Connectivity(), filters)
+        imported_connectivity = TestFactory.get_entity(self.test_project, ConnectivityIndex(), filters)
 
         # check relationship between the imported connectivity and the reference
         assert (reference_connectivity.centres == imported_connectivity.centres).all()
@@ -133,7 +149,7 @@ class TestCSVConnectivityImporter(TransactionalTestCase):
         TestFactory.import_cff(test_user=self.test_user, test_project=self.test_project)
         field = FilterChain.datatype + '.subject'
         filters = FilterChain('', [field], [TEST_SUBJECT_A], ['!='])
-        bad_reference_connectivity = TestFactory.get_entity(self.test_project, Connectivity(), filters)
+        bad_reference_connectivity = TestFactory.get_entity(self.test_project, ConnectivityIndex(), filters)
 
         with pytest.raises(OperationException):
             self._import_csv_test_connectivity(bad_reference_connectivity.gid, TEST_SUBJECT_A)

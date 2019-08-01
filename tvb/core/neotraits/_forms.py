@@ -467,8 +467,8 @@ class MultiSelectField(TraitField):
 def ScalarField(trait_attribute, form, name=None, disabled=False):
     # as this makes introspective decisions it has to be moved at a different level
     field_type_for_trait_type = {
-        str: BytesField,
-        unicode: StrField,
+        bytes: BytesField,
+        str: StrField,
         int: IntField,
         float: FloatField,
         bool: BoolField,
@@ -521,13 +521,13 @@ class Form(object):
 
     @property
     def fields(self):
-        for field in self.__dict__.itervalues():
+        for field in self.__dict__.values():
             if isinstance(field, Field):
                 yield field
 
     @property
     def trait_fields(self):
-        for field in self.__dict__.itervalues():
+        for field in self.__dict__.values():
             if isinstance(field, TraitField):
                 yield field
 

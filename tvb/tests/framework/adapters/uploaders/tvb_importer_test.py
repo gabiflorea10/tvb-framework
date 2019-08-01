@@ -29,11 +29,15 @@
 #
 
 """
+.. moduleauthor:: Gabriel Florea <gabriel.florea@codemart.ro>
 .. moduleauthor:: Calin Pavel <calin.pavel@codemart.ro>
 """
 
 import os
 import shutil
+from cherrypy._cpreqbody import Part
+from cherrypy.lib.httputil import HeaderMap
+from tvb.adapters.uploaders.tvb_importer import TVBImporterForm
 from tvb.tests.framework.core.base_testcase import TransactionalTestCase
 from tvb.adapters.exporters.export_manager import ExportManager
 from tvb.basic.profile import TvbProfile
@@ -95,10 +99,16 @@ class TestTVBImporter(TransactionalTestCase):
         """
         ### Retrieve Adapter instance 
         importer = TestFactory.create_adapter('tvb.adapters.uploaders.tvb_importer', 'TVBImporter')
-        args = {'data_file': import_file_path}
+
+        form = TVBImporterForm()
+        form.fill_from_post({ '_data_file': Part(import_file_path, HeaderMap({}), ''),
+                              '_Data_Subject': 'John Doe'
+                            })
+        form.data_file.data = import_file_path
+        importer.set_form(form)
 
         ### Launch import Operation
-        FlowService().fire_operation(importer, self.test_user, self.test_project.id, **args)
+        FlowService().fire_operation(importer, self.test_user, self.test_project.id, **form.get_form_values())
 
 
     def test_zip_import(self):

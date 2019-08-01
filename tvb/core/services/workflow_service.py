@@ -37,11 +37,13 @@ import json
 from datetime import datetime
 from tvb.basic.logger.builder import get_logger
 from tvb.core.entities.file.files_helper import FilesHelper
+from tvb.core.entities.model.model_burst import BurstConfiguration
+from tvb.core.entities.model.model_datatype import DataTypeGroup
+from tvb.core.entities.model.model_operation import STATUS_ERROR
+from tvb.core.entities.model.model_workflow import Workflow, WorkflowStep
 from tvb.core.entities.storage import dao
-from tvb.core.entities import model
 from tvb.core.services.exceptions import WorkflowInterStepsException
 from tvb.core.entities.transient.burst_configuration_entities import WorkflowStepConfiguration
-from types import IntType
 
 
 DYNAMIC_PARAMS_KEY = "dynamic_params"
@@ -67,7 +69,7 @@ class WorkflowService:
         :param message: message in case of error
         :return: operation instance changed
         """
-        operation.mark_complete(operation_status, unicode(message))
+        operation.mark_complete(operation_status, str(message))
         dao.store_entity(operation)
         operation = dao.get_operation_by_id(operation.id)
         self.file_helper.write_operation_metadata(operation)
@@ -92,10 +94,10 @@ class WorkflowService:
         """
         workflows = []
         for operation in operations:
-            new_workflow = model.Workflow(project_id, burst_id)
+            new_workflow = Workflow(project_id, burst_id)
             new_workflow = dao.store_entity(new_workflow)
             workflows.append(new_workflow)
-            simulation_step = model.WorkflowStep(algorithm_id=simulator_id, workflow_id=new_workflow.id,
+            simulation_step = WorkflowStep(algorithm_id=simulator_id, workflow_id=new_workflow.id,
                                                  step_index=simulator_index, static_param=operation.parameters)
             simulation_step.fk_operation = operation.id
             dao.store_entity(simulation_step)
@@ -134,7 +136,7 @@ class WorkflowService:
                         former_step = dao.get_workflow_step_by_step_index(next_workflow_step.fk_workflow,
                                                                           dynamic_param[
                                                                               WorkflowStepConfiguration.STEP_INDEX_KEY])
-                        if type(dynamic_param[WorkflowStepConfiguration.DATATYPE_INDEX_KEY]) is IntType:
+                        if type(dynamic_param[WorkflowStepConfiguration.DATATYPE_INDEX_KEY]) is int:
                             datatypes = dao.get_results_for_operation(former_step.fk_operation)
                             op_params[param_name] = datatypes[
                                 dynamic_param[WorkflowStepConfiguration.DATATYPE_INDEX_KEY]].gid
@@ -173,13 +175,13 @@ class WorkflowService:
         """
         executed_step, _ = self._get_data(operation.id)
         if executed_step is not None:
-            if operation.status == model.STATUS_ERROR:
+            if operation.status == STATUS_ERROR:
                 all_executed_steps = dao.get_workflow_steps(executed_step.fk_workflow)
                 for step in all_executed_steps:
                     if step.step_index > executed_step.step_index:
                         self.logger.debug("Marking unreached operation %s with error." % step.fk_operation)
                         unreached_operation = dao.get_operation_by_id(step.fk_operation)
-                        self.persist_operation_state(unreached_operation, model.STATUS_ERROR,
+                        self.persist_operation_state(unreached_operation, STATUS_ERROR,
                                                      "Blocked by failure in step %s with message: \n\n%s." % (
                                                          executed_step.step_index, operation.additional_info))
 
@@ -213,13 +215,13 @@ class WorkflowService:
         :param error_message: If given, set the status to error and perpetuate the message.
         """
         if burst_status is None:
-            burst_status = model.BurstConfiguration.BURST_FINISHED
+            burst_status = BurstConfiguration.BURST_FINISHED
         if error_message is not None:
-            burst_status = model.BurstConfiguration.BURST_ERROR
+            burst_status = BurstConfiguration.BURST_ERROR
 
         try:
             ### If there are any DataType Groups in current Burst, update their counter.
-            burst_dt_groups = dao.get_generic_entity(model.DataTypeGroup, burst_entity.id, "fk_parent_burst")
+            burst_dt_groups = dao.get_generic_entity(DataTypeGroup, burst_entity.id, "fk_parent_burst")
             for dt_group in burst_dt_groups:
                 dt_group.count_results = dao.count_datatypes_in_group(dt_group.id)
                 dt_group.disk_size, dt_group.subject = dao.get_summary_for_group(dt_group.id)

@@ -29,6 +29,7 @@
 #
 
 """
+.. moduleauthor:: Gabriel Florea <gabriel.florea@codemart.ro>
 .. moduleauthor:: Calin Pavel <calin.pavel@codemart.ro>
 """
 
@@ -60,8 +61,8 @@ class TestGIFTISurfaceImporter(TransactionalTestCase):
 
     def transactional_setup_method(self):
         self.datatypeFactory = DatatypesFactory()
-        self.test_project = self.datatypeFactory.get_project()
-        self.test_user = self.datatypeFactory.get_user()
+        self.test_user = TestFactory.create_user('Gifti_User')
+        self.test_project = TestFactory.create_project(self.test_user, "Gifti_Project")
 
 
     def transactional_teardown_method(self):

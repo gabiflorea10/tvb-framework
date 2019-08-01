@@ -29,16 +29,19 @@
 #
 
 """
+.. moduleauthor:: Gabriel Florea <gabriel.florea@codemart.ro>
 .. moduleauthor:: Lia Domide <lia.domide@codemart.ro>
 
 """
 import os
 import pytest
 import tvb_data.cff as dataset
+from cherrypy._cpreqbody import Part
+from cherrypy.lib.httputil import HeaderMap
+from tvb.adapters.uploaders.cff_importer import CFFImporterForm
 from tvb.tests.framework.core.base_testcase import TransactionalTestCase
 from tvb.core.services.exceptions import OperationException
 from tvb.core.services.flow_service import FlowService
-from tvb.core.entities.transient.structure_entities import DataTypeMetaData
 from tvb.tests.framework.core.factory import TestFactory
 
 
@@ -59,10 +62,17 @@ class TestCFFUpload(TransactionalTestCase):
     def _run_cff_importer(self, cff_path):
         # Retrieve Adapter instance
         importer = TestFactory.create_adapter('tvb.adapters.uploaders.cff_importer', 'CFF_Importer')
-        args = {'cff': cff_path, DataTypeMetaData.KEY_SUBJECT: DataTypeMetaData.DEFAULT_SUBJECT}
+        form = CFFImporterForm()
+        form.fill_from_post({'_cff': Part(self.VALID_CFF, HeaderMap({}), ''), '_Data_Subject': 'John Doe',
+                             '_key_edge_weight': 'adc_mean', '_key_edge_tract': 'fiber_length_mean',
+                             '_key_node_coordinates': 'dn_position', '_key_node_label': 'dn_name',
+                             '_key_node_region': 'dn_region', '_key_node_hemisphere': 'dn_hemisphere'
+                             })
+        form.cff.data = cff_path
+        importer.set_form(form)
 
         # Launch Operation
-        FlowService().fire_operation(importer, self.test_user, self.test_project.id, **args)
+        FlowService().fire_operation(importer, self.test_user, self.test_project.id, **form.get_form_values())
 
     def test_invalid_input(self):
         """

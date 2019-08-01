@@ -37,7 +37,6 @@
 import os
 import sys
 import signal
-import Queue as queue
 import threading
 from subprocess import Popen, PIPE
 from tvb.basic.profile import TvbProfile
@@ -46,6 +45,11 @@ from tvb.core.utils import parse_json_parameters
 from tvb.core.entities.model.model_operation import OperationProcessIdentifier, STATUS_ERROR, STATUS_CANCELED
 from tvb.core.entities.storage import dao
 from tvb.core.services.workflow_service import WorkflowService
+
+if sys.version_info[0] == 3:
+    import queue
+else:
+    import Queue as queue
 
 
 LOGGER = get_logger(__name__)

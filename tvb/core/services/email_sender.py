@@ -32,7 +32,12 @@
 """
 
 import smtplib
-from email.MIMEText import MIMEText
+import sys
+
+if sys.version_info[0] == 3:
+    from email.mime.text import MIMEText
+else:
+    from email.MIMEText import MIMEText
 
 
 

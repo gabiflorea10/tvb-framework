@@ -41,12 +41,10 @@ import os
 import json
 import zipfile
 import sys
-import six
 from copy import copy
 from cgi import FieldStorage
-from datetime import datetime
 from tvb.basic.exceptions import TVBException
-from tvb.basic.traits.types_basic import MapAsJson, Range
+from tvb.basic.neotraits.api import Range
 from tvb.basic.profile import TvbProfile
 from tvb.basic.logger.builder import get_logger
 from tvb.core import utils
@@ -60,6 +58,7 @@ from tvb.core.entities.model.model_workflow import WorkflowStepView
 from tvb.core.entities.storage import dao
 from tvb.core.entities.transient.structure_entities import DataTypeMetaData
 from tvb.core.entities.file.files_helper import FilesHelper
+from tvb.core.neotraits._h5accessors import Json
 from tvb.core.services.workflow_service import WorkflowService
 from tvb.core.services.backend_client import BACKEND_CLIENT
 
@@ -265,7 +264,7 @@ class OperationService:
                     ## For visualization steps, do not create operations, as those are not really needed.
                     metadata, user_group = self._prepare_metadata(metadata, algo_category, operation_group, op_params)
                     operation = Operation(user_id, project_id, step.fk_algorithm,
-                                                json.dumps(op_params, cls=MapAsJson.MapAsJsonEncoder),
+                                                json.dumps(op_params, cls=Json.MapAsJsonEncoder),
                                                 meta=json.dumps(metadata),
                                                 op_group_id=group_id, range_values=range_values, user_group=user_group)
                     operation.visible = step.step_visible
@@ -387,11 +386,11 @@ class OperationService:
         """
         self.logger.exception(message)
         if operation is not None:
-            self.workflow_service.persist_operation_state(operation, STATUS_ERROR, unicode(exception))
+            self.workflow_service.persist_operation_state(operation, STATUS_ERROR, str(exception))
             self.workflow_service.update_executed_workflow_state(operation)
         self._remove_files(temp_files)
         exception.message = message
-        raise exception, None, sys.exc_info()[2]  # when rethrowing in python this is required to preserve the stack trace
+        raise exception.with_traceback(sys.exc_info()[2])  # when rethrowing in python this is required to preserve the stack trace
 
 
     def _remove_files(self, file_list):
@@ -481,7 +480,7 @@ class OperationService:
             lo_val = float(range_data[constants.ATT_MINVALUE])
             hi_val = float(range_data[constants.ATT_MAXVALUE])
             step = float(range_data[constants.ATT_STEP])
-            range_values = list(Range(lo=lo_val, hi=hi_val, step=step, mode=Range.MODE_INCLUDE_BOTH))
+            range_values = list(Range(lo=lo_val, hi=hi_val, step=step))
 
         else:
             for possible_value in range_data:

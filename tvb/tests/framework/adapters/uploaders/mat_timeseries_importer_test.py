@@ -30,19 +30,22 @@
 
 """
 Unit-test for mat_timeseries_importer and mat_parser.
-
+.. moduleauthor:: Gabriel Florea <gabriel.florea@codemart.ro>
 .. moduleauthor:: Mihai Andrei <mihai.andrei@codemart.ro>
 """
 
 import os
 import tvb_data
+from cherrypy._cpreqbody import Part
+from cherrypy.lib.httputil import HeaderMap
+from tvb.adapters.uploaders.mat_timeseries_importer import MatTimeSeriesImporterForm
 from tvb.tests.framework.core.base_testcase import TransactionalTestCase
-from tvb.datatypes.connectivity import Connectivity
-from tvb.datatypes.time_series import TimeSeriesRegion
 from tvb.core.entities.file.files_helper import FilesHelper
 from tvb.core.services.flow_service import FlowService
 from tvb.tests.framework.core.factory import TestFactory
-from tvb.tests.framework.datatypes.datatypes_factory import DatatypesFactory
+from tvb.core.entities.model.datatypes.connectivity import ConnectivityIndex
+from tvb.core.entities.model.datatypes.time_series import TimeSeriesRegionIndex
+from tvb.adapters.uploaders.zip_connectivity_importer import ZIPConnectivityImporterForm
 
 
 class TestMatTimeSeriesImporter(TransactionalTestCase):
@@ -52,9 +55,8 @@ class TestMatTimeSeriesImporter(TransactionalTestCase):
     connectivity_path = os.path.join(base_pth, 'QL_20120814_Connectivity.zip')
 
     def transactional_setup_method(self):
-        self.datatypeFactory = DatatypesFactory()
-        self.test_project = self.datatypeFactory.get_project()
-        self.test_user = self.datatypeFactory.get_user()
+        self.test_user = TestFactory.create_user('Mat_Timeseries_User')
+        self.test_project = TestFactory.create_project(self.test_user, "Mat_Timeseries_Project")
         self._import_connectivity()
 
 
@@ -66,27 +68,45 @@ class TestMatTimeSeriesImporter(TransactionalTestCase):
         importer = TestFactory.create_adapter('tvb.adapters.uploaders.zip_connectivity_importer',
                                               'ZIPConnectivityImporter')
 
+        form = ZIPConnectivityImporterForm()
+
+        form.fill_from_post({'_uploaded': Part(self.connectivity_path, HeaderMap({}), ''),
+                             '_normalization': 'region',
+                             '_project_id': '1',
+                             '_Data_Subject': 'John Doe'
+                             })
+        form.uploaded.data = self.connectivity_path
+        importer.set_form(form)
+
         ### Launch Operation
         FlowService().fire_operation(importer, self.test_user, self.test_project.id,
-                                     uploaded=self.connectivity_path, Data_Subject='QL')
+                                     **form.get_form_values())
 
-        self.connectivity = TestFactory.get_entity(self.test_project, Connectivity())
+
+        self.connectivity = TestFactory.get_entity(self.test_project, ConnectivityIndex())
 
 
     def test_import_bold(self):
         ### Retrieve Adapter instance
         importer = TestFactory.create_adapter('tvb.adapters.uploaders.mat_timeseries_importer', 'MatTimeSeriesImporter')
 
-        args = dict(data_file=self.bold_path, dataset_name='QL_20120824_DK_BOLD_timecourse', structure_path='',
-                    transpose=False, slice=None, sampling_rate=1000, start_time=0,
-                    tstype='region',
-                    tstype_parameters_option_region_connectivity=self.connectivity.gid,
-                    Data_Subject="QL")
+        form = MatTimeSeriesImporterForm()
+        form.fill_from_post({ '_data_file': Part(self.bold_path, HeaderMap({}), ''),
+                              '_dataset_name': 'QL_20120824_DK_BOLD_timecourse',
+                              '_structure_path': '',
+                              '_transpose': 'False',
+                              '_slice': '',
+                              '_samling_rate': 100,
+                              '_start_time': '0',
+                              '_Data_Subject': 'QL'
+                            })
+        form.data_file.data = self.bold_path
+        importer.set_form(form)
 
         ### Launch import Operation
-        FlowService().fire_operation(importer, self.test_user, self.test_project.id, **args)
+        FlowService().fire_operation(importer, self.test_user, self.test_project.id, **form.get_form_values())
 
-        tsr = TestFactory.get_entity(self.test_project, TimeSeriesRegion())
+        tsr = TestFactory.get_entity(self.test_project, TimeSeriesRegionIndex())
 
         assert (661, 1, 68, 1) == tsr.read_data_shape()
 

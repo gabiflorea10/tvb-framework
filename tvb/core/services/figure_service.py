@@ -40,14 +40,17 @@ import os
 from PIL import Image
 import base64
 import xml.dom.minidom
-from StringIO import StringIO
+import sys
 from tvb.basic.logger.builder import get_logger
 from tvb.core import utils
 from tvb.core.entities import model
 from tvb.core.entities.storage import dao
 from tvb.core.entities.file.files_helper import FilesHelper
 
-
+if sys.version_info[0] == 3:
+    from io import StringIO
+else:
+    from StringIO import StringIO
 
 class FigureService:
     """

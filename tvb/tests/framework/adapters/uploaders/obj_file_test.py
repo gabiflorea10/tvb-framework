@@ -32,10 +32,12 @@
 .. moduleauthor:: Mihai Andrei <mihai.andrei@codemart.ro>
 """
 
-from StringIO import StringIO
+import sys
 from tvb.adapters.uploaders.obj.parser import ObjWriter, ObjParser
-
-
+if sys.version_info[0] == 3:
+    from io import StringIO
+else:
+    from StringIO import StringIO
 
 class TestObjFiles():
 
@@ -71,5 +73,4 @@ class TestObjFiles():
         p.read(f)
         assert vertices == p.vertices
         assert normals == p.normals
-        # assert triangles == p.faces
 

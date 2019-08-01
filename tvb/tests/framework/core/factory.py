@@ -33,6 +33,7 @@
  A Factory class to be used in tests for generating default entities:
 Project, User, Operation, basic imports (e.g. CFF).
 
+.. moduleauthor:: Gabriel Florea <gabriel.florea@codemart.ro>
 .. moduleauthor:: Bogdan Neacsa <bogdan.neacsa@codemart.ro>
 .. moduleauthor:: Lia Domide <lia.domide@codemart.ro>
 
@@ -43,9 +44,19 @@ import json
 import random
 import tvb_data.cff as cff_dataset
 from hashlib import md5
-from tvb.core.entities import model
+from cherrypy._cpreqbody import Part
+from cherrypy.lib.httputil import HeaderMap
+
+from tvb.adapters.uploaders.cff_importer import CFFImporterForm
+from tvb.adapters.uploaders.obj_importer import ObjSurfaceImporterForm
+from tvb.adapters.uploaders.sensors_importer import SensorsImporterForm
+from tvb.adapters.uploaders.zip_connectivity_importer import ZIPConnectivityImporterForm
+from tvb.adapters.uploaders.zip_surface_importer import ZIPSurfaceImporterForm
+from tvb.core.entities.model.model_operation import STATUS_FINISHED, Operation, ResultFigure
+from tvb.core.entities.model.model_project import User
+from tvb.core.entities.model.model_workflow import WorkflowStepView, WorkflowStep
 from tvb.core.entities.storage import dao
-from tvb.core.entities.model.model_burst import BurstConfiguration
+from tvb.core.entities.model.model_burst import BurstConfiguration, RANGE_PARAMETER_1
 from tvb.core.entities.transient.burst_configuration_entities import WorkflowStepConfiguration as wf_cfg
 from tvb.core.entities.transient.structure_entities import DataTypeMetaData
 from tvb.core.services.project_service import ProjectService
@@ -77,7 +88,7 @@ class TestFactory(object):
         """
         Return the count of stored datatypes with class given by `datatype`
 
-        :param datatype: Take class from this instance amd count for this class
+        :param datatype: Take class from this instance and count for this class
         """
         return dao.count_datatypes(project.id, datatype.__class__)
 
@@ -90,7 +101,7 @@ class TestFactory(object):
         
         :returns: User entity after persistence.
         """
-        user = model.User(username, password, mail, validated, role)
+        user = User(username, password, mail, validated, role)
         return dao.store_entity(user) 
     
     
@@ -111,16 +122,16 @@ class TestFactory(object):
     def create_figure(operation_id, user_id, project_id, session_name=None, 
                       name=None, path=None, file_format='PNG'):
         """
-        :returns: the `model.ResultFigure` for a result with the given specifications
+        :returns: the `ResultFigure` for a result with the given specifications
         """
-        figure = model.ResultFigure(operation_id, user_id, project_id, 
+        figure = ResultFigure(operation_id, user_id, project_id,
                                     session_name, name, path, file_format)
         return dao.store_entity(figure)
     
     
     @staticmethod
     def create_operation(algorithm=None, test_user=None, test_project=None, 
-                         operation_status=model.STATUS_FINISHED, parameters="test params"):
+                         operation_status=STATUS_FINISHED, parameters="test params"):
         """
         Create persisted operation.
         
@@ -139,7 +150,7 @@ class TestFactory(object):
             
         meta = {DataTypeMetaData.KEY_SUBJECT: "John Doe",
                 DataTypeMetaData.KEY_STATE: "RAW_DATA"}
-        operation = model.Operation(test_user.id, test_project.id, algorithm.id, parameters, meta=json.dumps(meta),
+        operation = Operation(test_user.id, test_project.id, algorithm.id, parameters, meta=json.dumps(meta),
                                     status=operation_status)
         dao.store_entity(operation)
         ### Make sure lazy attributes are correctly loaded.
@@ -158,7 +169,7 @@ class TestFactory(object):
         
         adapter_inst = TestFactory.create_adapter('tvb.tests.framework.adapters.testadapter3', 'TestAdapter3')
         adapter_inst.meta_data = {DataTypeMetaData.KEY_SUBJECT: subject}
-        args = {model.RANGE_PARAMETER_1: 'param_5', 'param_5': [1, 2]}
+        args = {RANGE_PARAMETER_1: 'param_5', 'param_5': [1, 2]}
         algo = adapter_inst.stored_adapter
         algo_category = dao.get_category_by_id(algo.fk_category)
         
@@ -213,9 +224,9 @@ class TestFactory(object):
             dynamic_params[entry][wf_cfg.STEP_INDEX_KEY] += base_step
          
         if is_view_step:
-            return model.WorkflowStepView(algorithm_id=algorithm.id, tab_index=tab_index, index_in_tab=index_in_tab,
+            return WorkflowStepView(algorithm_id=algorithm.id, tab_index=tab_index, index_in_tab=index_in_tab,
                                           static_param=static_params, dynamic_param=dynamic_params)
-        return model.WorkflowStep(algorithm_id=algorithm.id, step_index=step_index, tab_index=tab_index,
+        return WorkflowStep(algorithm_id=algorithm.id, step_index=step_index, tab_index=tab_index,
                                   index_in_tab=index_in_tab, static_param=static_params, dynamic_param=dynamic_params)
 
 
@@ -249,48 +260,82 @@ class TestFactory(object):
             
         ### Retrieve Adapter instance
         importer = TestFactory.create_adapter('tvb.adapters.uploaders.cff_importer', 'CFF_Importer')
-        args = {'cff': cff_path, DataTypeMetaData.KEY_SUBJECT: DataTypeMetaData.DEFAULT_SUBJECT}
+        form = CFFImporterForm()
+        form.fill_from_post({'_cff': Part(cff_path, HeaderMap({}), ''), '_Data_Subject': 'John Doe',
+                             '_key_edge_weight': 'adc_mean', '_key_edge_tract': 'fiber_length_mean',
+                             '_key_node_coordinates': 'dn_position', '_key_node_label': 'dn_name',
+                             '_key_node_region': 'dn_region', '_key_node_hemisphere': 'dn_hemisphere'
+                             })
+        form.cff.data = cff_path
+        importer.set_form(form)
         
         ### Launch Operation
-        FlowService().fire_operation(importer, test_user, test_project.id, **args)
+        FlowService().fire_operation(importer, test_user, test_project.id, **form.get_form_values())
         
         
     @staticmethod
     def import_surface_zip(user, project, zip_path, surface_type, zero_based):
         ### Retrieve Adapter instance 
         importer = TestFactory.create_adapter('tvb.adapters.uploaders.zip_surface_importer', 'ZIPSurfaceImporter')
-        args = {'uploaded': zip_path, 'surface_type': surface_type,
-                'zero_based_triangles': zero_based}
+        form = ZIPSurfaceImporterForm()
+        form.fill_from_post({'_uploaded': Part(zip_path, HeaderMap({}), ''),
+                             '_zero_based_triangles': zero_based,
+                             '_should_center': 'True',
+                             '_surface_type': surface_type,
+                             '_Data_Subject': 'John Doe'
+                            })
+        form.uploaded.data=zip_path
+        importer.set_form(form)
         
         ### Launch Operation
-        FlowService().fire_operation(importer, user, project.id, **args)
+        FlowService().fire_operation(importer, user, project.id, **form.get_form_values())
 
 
     @staticmethod
     def import_surface_obj(user, project, obj_path, surface_type):
         ### Retrieve Adapter instance
         importer = TestFactory.create_adapter('tvb.adapters.uploaders.obj_importer', 'ObjSurfaceImporter')
-        args = {'data_file': obj_path,
-                'surface_type': surface_type}
+        form = ObjSurfaceImporterForm()
+        form.fill_from_post({'_data_file': Part(obj_path, HeaderMap({}), ''),
+                             '_surface_type': surface_type,
+                             '_Data_Subject': 'John Doe'
+                            })
+        form.data_file.data = obj_path
+        importer.set_form(form)
 
         ### Launch Operation
-        FlowService().fire_operation(importer, user, project.id, **args)
+        FlowService().fire_operation(importer, user, project.id, **form.get_form_values())
         
         
     @staticmethod
     def import_sensors(user, project, zip_path, sensors_type):
         ### Retrieve Adapter instance 
         importer = TestFactory.create_adapter('tvb.adapters.uploaders.sensors_importer', 'Sensors_Importer')
-        args = {'sensors_file': zip_path, 'sensors_type': sensors_type}
+        form = SensorsImporterForm()
+        form.fill_from_post({'_sensors_file': Part(zip_path, HeaderMap({}), ''),
+                             '_sensors_type': sensors_type,
+                             '_Data_Subject': 'John Doe'
+                            })
+        form.sensors_file.data = zip_path
+        importer.set_form(form)
+
         ### Launch Operation
-        FlowService().fire_operation(importer, user, project.id, **args)
+        FlowService().fire_operation(importer, user, project.id, **form.get_form_values())
     
     
     @staticmethod
     def import_zip_connectivity(user, project, subject, zip_path):
         importer = TestFactory.create_adapter('tvb.adapters.uploaders.zip_connectivity_importer',
                                               'ZIPConnectivityImporter')
-        FlowService().fire_operation(importer, user, project.id, uploaded=zip_path, Data_Subject=subject)
+        form = ZIPConnectivityImporterForm()
+        form.fill_from_post({'_uploaded': Part(zip_path, HeaderMap({}), ''),
+                             '_project_id': {1},
+                             '_Data_Subject': 'John Doe'
+                             })
+        form.uploaded.data = zip_path
+        importer.set_form(form)
+
+        FlowService().fire_operation(importer, user, project.id, **form.get_form_values())
 
 
 class ExtremeTestFactory():
@@ -331,7 +376,7 @@ class ExtremeTestFactory():
             coin_flip = random.randint(0, 1)
             role = 'CLINICIAN' if coin_flip == 1 else 'RESEARCHER'
             password = md5("test").hexdigest()
-            new_user = model.User("gen" + str(i), password, "test_mail@tvb.org", True, role)
+            new_user = User("gen" + str(i), password, "test_mail@tvb.org", True, role)
             dao.store_entity(new_user)
             new_user = dao.get_user_by_name("gen" + str(i))
             ExtremeTestFactory.VALIDATION_DICT[new_user.id] = 0

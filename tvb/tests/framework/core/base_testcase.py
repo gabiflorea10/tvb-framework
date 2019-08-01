@@ -37,9 +37,14 @@
 import os
 import sys
 import shutil
+import six
 from functools import wraps
 from types import FunctionType
 from tvb.basic.profile import TvbProfile
+from tvb.core.entities.model.model_datatype import DataType
+from tvb.core.entities.model.model_operation import Operation
+from tvb.core.entities.model.model_project import User
+from tvb.core.neotraits.db import Base
 
 
 def init_test_env():
@@ -63,7 +68,7 @@ def init_test_env():
     from tvb.core.services.initializer import initialize
 
     reset_database()
-    initialize(["tvb.config", "tvb.tests.framework"], skip_import=True)
+    initialize(["tvb.config", "tvb.tests.framework"])
 
 
 # Following code is executed once / tests execution to reduce time spent in tests.
@@ -77,7 +82,6 @@ from tvb.core.services.operation_service import OperationService
 from tvb.core.entities.file.files_helper import FilesHelper
 from tvb.core.entities.storage import dao
 from tvb.core.entities.storage.session_maker import SessionMaker
-from tvb.core.entities import model
 
 LOGGER = get_logger(__name__)
 
@@ -102,7 +106,7 @@ class BaseTestCase(object):
         LOGGER.warning("Your Database content will be deleted.")
         try:
             session = SessionMaker()
-            for table in reversed(model.Base.metadata.sorted_tables):
+            for table in reversed(Base.metadata.sorted_tables):
                 # We don't delete data from some tables, because those are 
                 # imported only during introspection which is done one time
                 if table.name not in self.EXCLUDE_TABLES:
@@ -127,7 +131,7 @@ class BaseTestCase(object):
         # Now if the database is clean we can delete also project folders on disk
         if delete_folders:
             self.delete_project_folders()
-        dao.store_entity(model.User(TvbProfile.current.web.admin.SYSTEM_USER_NAME, None, None, True, None))
+        dao.store_entity(User(TvbProfile.current.web.admin.SYSTEM_USER_NAME, None, None, True, None))
 
 
     def cancel_all_operations(self):
@@ -137,7 +141,7 @@ class BaseTestCase(object):
         """
         LOGGER.info("Stopping all operations.")
         op_service = OperationService()
-        operations = self.get_all_entities(model.Operation)
+        operations = self.get_all_entities(Operation)
         for operation in operations:
             op_service.stop_operation(operation.id)
 
@@ -219,7 +223,7 @@ class BaseTestCase(object):
         """
         Return all DataType entities in DB or [].
         """
-        return self.get_all_entities(model.DataType)
+        return self.get_all_entities(DataType)
 
 
     def assert_compliant_dictionary(self, expected, found_dict):
@@ -227,7 +231,7 @@ class BaseTestCase(object):
         Compare two dictionaries, especially as keys.
         When in expected_dictionary the value is not None, validate also to be found in found_dict.
         """
-        for key, value in expected.iteritems():
+        for key, value in expected.items():
             assert key in found_dict, "%s not found in result" % key
             if value is not None:
                 assert value == found_dict[key]
@@ -295,7 +299,7 @@ class TransactionalTestMeta(type):
         return type.__new__(mcs, classname, bases, new_class_dict)
 
 
-
+@six.add_metaclass(TransactionalTestMeta)
 class TransactionalTestCase(BaseTestCase):
     """
     This class makes sure that any test case it contains is ran in a transactional
@@ -311,5 +315,4 @@ class TransactionalTestCase(BaseTestCase):
     WARNING! Do not use this is any test class that has uses multiple threads to do
     dao related operations since that might cause errors/leave some dangling sessions.
     """
-    __metaclass__ = TransactionalTestMeta
 
